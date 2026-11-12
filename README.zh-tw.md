@@ -1,3 +1,6 @@
+> **This is BananaGit**, a fork of Gitea. What differs, and how to install and update it, is in [README.md](README.md) (English).
+> Everything below is Gitea's own README, unchanged.
+
 # Gitea
 
 [![](https://github.com/go-gitea/gitea/actions/workflows/release-nightly.yml/badge.svg?branch=main)](https://github.com/go-gitea/gitea/actions/workflows/release-nightly.yml?query=branch%3Amain "Release Nightly")

@@ -1,5 +1,10 @@
 # Reporting security issues
 
+> **BananaGit:** report problems in what BananaGit adds (the updater, the release
+> and migration scripts, the themes) privately to the maintainers at
+> <https://github.com/BananaSuite/BananaGit/security/advisories/new>.
+> Problems in Gitea itself go to Gitea, as described below.
+
 The Gitea maintainers take security seriously.
 
 If you discover a security issue, please bring it to their attention right away!

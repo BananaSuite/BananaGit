@@ -30,6 +30,7 @@ anyone who can push tags can make servers skip to an older signed release.
    the `bananagit-sync` workflow does it and opens a pull request). For a new
    series: `bananagit/scripts/sync-upstream.sh v1.28.0`. On conflicts, resolve
    them (ours are in the few files listed in the README) and commit. Push.
+   `bananagit/scripts/diff-upstream.sh` shows what differs from Gitea afterwards.
 2. **Check it.** `TAGS="sqlite sqlite_unlock_notify" make build`, start
    `./gitea web`, look at the themes and the logo.
 3. **Build and tag** from a clean, up-to-date `main`:

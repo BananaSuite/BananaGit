@@ -1,203 +1,227 @@
-> **This is BananaGit**, Officina Tecnologica's fork of Gitea in the BananaSuite colours, with its own updater.
-> What differs from Gitea, and how to build, update, release and migrate, is in [bananagit/README.md](bananagit/README.md).
-> Everything below is Gitea's own README, unchanged.
+<p align="center">
+  <img src="assets/logo.svg" alt="BananaGit logo" width="96">
+</p>
 
-# Gitea
+# BananaGit
 
-[![](https://github.com/go-gitea/gitea/actions/workflows/release-nightly.yml/badge.svg?branch=main)](https://github.com/go-gitea/gitea/actions/workflows/release-nightly.yml?query=branch%3Amain "Release Nightly")
-[![](https://img.shields.io/discord/322538954119184384.svg?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/Gitea "Join the Discord chat at https://discord.gg/Gitea")
-[![](https://goreportcard.com/badge/gitea.dev)](https://goreportcard.com/report/gitea.dev "Go Report Card")
-[![](https://pkg.go.dev/badge/gitea.dev?status.svg)](https://pkg.go.dev/gitea.dev "GoDoc")
-[![](https://img.shields.io/github/release/go-gitea/gitea.svg)](https://github.com/go-gitea/gitea/releases/latest "GitHub release")
-[![](https://www.codetriage.com/go-gitea/gitea/badges/users.svg)](https://www.codetriage.com/go-gitea/gitea "Help Contribute to Open Source")
-[![](https://opencollective.com/gitea/tiers/backers/badge.svg?label=backers&color=brightgreen)](https://opencollective.com/gitea "Become a backer/sponsor of gitea")
-[![](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT "License: MIT")
-[![](https://badges.crowdin.net/gitea/localized.svg)](https://translate.gitea.com "Crowdin")
+BananaGit is a self-hosted Git service: repository hosting, code review, issues,
+wiki, package registry and CI/CD. It is [Officina Tecnologica](https://git.officinatecnologica.eu)'s
+fork of [Gitea](https://about.gitea.com), in the BananaSuite colours and with
+its own signed, self-rolling-back updater.
 
-[繁體中文](./README.zh-tw.md) | [简体中文](./README.zh-cn.md)
+Apart from the short list below it **is** Gitea: the same features, database,
+`app.ini` and API. Gitea's [documentation](https://docs.gitea.com/) applies unchanged.
 
-## Purpose
+- [Quickstart](#quickstart)
+- [What changes between Gitea and BananaGit](#what-changes-between-gitea-and-bananagit)
+- [Install](#install)
+- [Update](#update)
+- [Following Gitea](#following-gitea)
+- [Build from source](#build-from-source)
+- [Coming from Gitea or Forgejo](#coming-from-gitea-or-forgejo)
+- [Contributing](#contributing)
+- [Licence and names](#licence-and-names)
 
-The goal of Gitea is to make the easiest, fastest, and most painless way of
-setting up a self-hosted all-in-one software development service,
-including Git hosting, code management, code review, issue tracking, project kanban, wiki,
-team collaboration, package registry and CI/CD which can reuse GitHub Actions.
+## Quickstart
 
-As Gitea is written in Go, it works across **all** the platforms and
-architectures that are supported by Go, including Linux, macOS, FreeBSD/OpenBSD and Windows
-on x86, amd64, ARM, RISC-V 64 and PowerPC architectures.
+Try it on your own machine in a few minutes. Needs Git, Go and Node.js with
+pnpm (see [docs/build-setup.md](docs/build-setup.md)).
 
-For online demonstrations, you can visit [demo.gitea.com](https://demo.gitea.com).
+```sh
+git clone https://github.com/BananaSuite/BananaGit.git
+cd BananaGit
+TAGS="sqlite sqlite_unlock_notify" make build
+./gitea web
+```
 
-For accessing free Gitea service (with a limited number of repositories), you can visit [gitea.com](https://gitea.com/user/login).
+Open <http://localhost:3000>, keep SQLite as the database, press install, and
+register: the first account is the administrator. Everything it writes stays
+in this folder (`data/`, `custom/`). For a real server, see [Install](#install).
 
-To quickly deploy your own dedicated Gitea instance on Gitea Cloud, you can start a free trial at [cloud.gitea.com](https://cloud.gitea.com),
-or use container (docker/podman/etc) to deploy on your own server with the [official image](https://hub.docker.com/r/gitea/gitea).
+## What changes between Gitea and BananaGit
+
+| Area | Gitea | BananaGit |
+| --- | --- | --- |
+| Look | Gitea's themes | Adds `bananagit-auto`, `bananagit-light` and `bananagit-dark` (Gitea's themes with other colours) and makes `bananagit-auto` the default |
+| Name | Default `APP_NAME` is "Gitea" | Default is "BananaGit"; the footer says "Powered by Gitea (BananaGit)" |
+| Logo | Gitea's tea cup | The BananaSuite banana (logo, favicon, default avatar) |
+| Updates | Replace the binary yourself | `bananagit-update`: verifies a signed release, backs up, switches, checks health and rolls back on failure; optional automatic updates |
+| Versions | `vX.Y.Z` | `vX.Y.Z.N`: Gitea's version plus our counter, e.g. `v1.27.3.1` |
+| Release binaries | Many platforms, SQLite included | `linux-amd64` and `linux-arm64`, built without SQLite by default |
+| Forgejo | No supported path | A tested, rehearsable in-place migration |
+| Repository | Full history, Gitea's CI | A snapshot of one Gitea release with our commits on top; Gitea's CI workflows, issue templates and funding file are removed |
+
+Everything else, including every setting, is Gitea's. An administrator can
+still change name, theme and logo as in Gitea (`APP_NAME`, `[ui] DEFAULT_THEME`,
+`custom/public/assets/img/`).
+
+The exact files we touch, and how upstream releases are merged in, are in
+[bananagit/README.md](bananagit/README.md). The Gitea release this tree is
+based on is named in [bananagit/UPSTREAM_VERSION](bananagit/UPSTREAM_VERSION).
+
+## Install
+
+These steps set up a Linux server with systemd, using the paths the updater
+expects by default. For anything else (other init systems, reverse proxies,
+HTTPS, mail), follow [Gitea's installation guide](https://docs.gitea.com/category/installation)
+with the BananaGit binary in place of `gitea`.
+
+### Requirements
+
+- Linux on amd64 or arm64, with systemd
+- Git
+- A PostgreSQL database and user for BananaGit. Release binaries are built
+  without SQLite by default, and the updater cannot back up MySQL
+- Python 3.9+ (only for the updater)
+
+### 1. Create the user and directories
+
+```sh
+sudo adduser --system --group --shell /bin/bash --home /home/git git
+sudo mkdir -p /opt/bananagit/{config,backups,releases} /var/lib/bananagit/{custom,data,log} /etc/bananagit
+sudo chown -R git:git /var/lib/bananagit
+sudo chown root:git /etc/bananagit
+sudo chmod 770 /etc/bananagit
+```
+
+### 2. Download and check a release
+
+Pick the newest version on the [releases page](https://github.com/BananaSuite/BananaGit/releases)
+and set `ARCH` to `amd64` or `arm64`.
+
+```sh
+VERSION=1.27.3.1
+ARCH=amd64
+git clone --depth 1 --branch "v$VERSION" https://github.com/BananaSuite/BananaGit.git
+curl -fLO "https://github.com/BananaSuite/BananaGit/releases/download/v$VERSION/bananagit-$VERSION-linux-$ARCH"
+git -C BananaGit tag -l --format='%(contents)' "v$VERSION"   # the expected SHA-256
+sha256sum "bananagit-$VERSION-linux-$ARCH"                    # must match
+```
+
+### 3. Put the binary in place
+
+```sh
+sudo install -D -m 755 "bananagit-$VERSION-linux-$ARCH" "/opt/bananagit/releases/$VERSION/bananagit"
+sudo ln -sfn "releases/$VERSION/bananagit" /opt/bananagit/current
+```
+
+### 4. Add the service
+
+The unit in [bananagit/contrib/bananagit.service](bananagit/contrib/bananagit.service)
+uses the paths above. Edit it first if your database is not a local PostgreSQL.
+
+```sh
+sudo cp BananaGit/bananagit/contrib/bananagit.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bananagit
+```
+
+### 5. Finish in the browser
+
+Open `http://<server>:3000`, fill in the database and the administrator
+account, and submit. Then stop the installer from being able to rewrite the
+configuration:
+
+```sh
+sudo chmod 750 /etc/bananagit
+sudo chmod 640 /etc/bananagit/app.ini
+```
+
+### 6. Install the updater
+
+```sh
+sudo cp -r BananaGit/bananagit/updater BananaGit/bananagit/bananagit-update /opt/bananagit/
+sudo ln -s /opt/bananagit/bananagit-update /usr/local/bin/bananagit-update
+echo "{\"version\": \"$VERSION\"}" | sudo tee /opt/bananagit/config/settings.json
+sudo bananagit-update check
+```
+
+`check` should print the installed and the latest version. If your service
+name, user, `app.ini` path or port differ from the ones above, add them to
+`settings.json` as described in [bananagit/docs/updating.md](bananagit/docs/updating.md#installing-the-updater).
+
+## Update
+
+```sh
+sudo bananagit-update check      # what update would install, without installing
+sudo bananagit-update update     # back up, install, check health, roll back on failure
+```
+
+Automatic updates are off until you enable them, and require signed releases:
+
+```sh
+sudo bananagit-update updates enable --require-signatures ALLOWED_SIGNERS --interval 60
+```
+
+`ALLOWED_SIGNERS` holds the maintainers' release keys; verify their
+fingerprints through a second channel. What an update does step by step, every
+setting and what to do when one fails are in [bananagit/docs/updating.md](bananagit/docs/updating.md).
+
+## Following Gitea
+
+BananaGit stays a soft fork: a new Gitea release is applied to this tree
+without anyone writing code.
+
+```sh
+bananagit/scripts/sync-upstream.sh           # newest patch release of the current series
+bananagit/scripts/sync-upstream.sh v1.28.0   # a new series
+bananagit/scripts/diff-upstream.sh           # what still differs from Gitea
+```
+
+On GitHub the `bananagit-sync` workflow does the first one daily, builds the
+result and opens a pull request. Files we replace entirely (the README, the
+logo, `.github/`) are listed in [bananagit/OURS](bananagit/OURS) and skipped,
+so they cannot conflict; the few lines we change inside Gitea's files are the
+only place a conflict can come from. Details: [bananagit/README.md](bananagit/README.md#following-gitea).
+
+## Build from source
+
+Needs Go and Node.js with pnpm, as Gitea does (see [docs/build-setup.md](docs/build-setup.md)).
+
+```sh
+TAGS="sqlite sqlite_unlock_notify" make build
+./gitea web        # http://localhost:3000
+```
+
+`make build` names the binary `gitea` (upstream's default); releases are named
+`bananagit-<version>-<platform>`. A local build reports its commit as the
+version; add `GITEA_VERSION=1.27.3` to `make build` for a proper one.
+[docs/development.md](docs/development.md) covers the development environment,
+linting and testing.
+
+## Coming from Gitea or Forgejo
+
+- **Gitea:** swap the binary; the database, `app.ini` and data stay as they
+  are. Steps and what users notice: [bananagit/docs/migrating-from-gitea.md](bananagit/docs/migrating-from-gitea.md).
+- **Forgejo:** possible in place but one-way, and it needs preparation. Rehearse
+  it on a copy first: [bananagit/docs/migrating-from-forgejo.md](bananagit/docs/migrating-from-forgejo.md).
 
 ## Documentation
 
-You can find comprehensive documentation on our official [documentation website](https://docs.gitea.com/).
-
-It includes installation, administration, usage, development, contributing guides, and more to help you get started and explore all features effectively.
-
-If you have any suggestions or would like to contribute to it, you can visit the [documentation repository](https://gitea.com/gitea/docs)
-
-## Building
-
-See [docs/build-setup.md](docs/build-setup.md) for prerequisites
-and [docs/development.md](docs/development.md) for setting up a local development environment, linting, and testing.
-
-If you'd like to build from source or make a distribution package, see [docs/build-source.md](docs/build-source.md) for more information.
-
-After building, you can run `./gitea web` to start the server, or `./gitea help` to see all available commands.
+| Topic | Where |
+| --- | --- |
+| Using and administering the server | [docs.gitea.com](https://docs.gitea.com/) |
+| Files that differ from Gitea, following upstream | [bananagit/README.md](bananagit/README.md) |
+| Updating, automatic updates, recovery | [bananagit/docs/updating.md](bananagit/docs/updating.md) |
+| Releasing (maintainers) | [bananagit/docs/releasing.md](bananagit/docs/releasing.md) |
+| Migrating from Gitea | [bananagit/docs/migrating-from-gitea.md](bananagit/docs/migrating-from-gitea.md) |
+| Migrating from Forgejo | [bananagit/docs/migrating-from-forgejo.md](bananagit/docs/migrating-from-forgejo.md) |
 
 ## Contributing
 
-Expected workflow is: Fork -> Patch -> Push -> Pull Request
+Contributions go to <https://github.com/BananaSuite/BananaGit>;
+`git.officinatecnologica.eu` carries a mirror. Changes that are not about
+BananaGit's name, look or updater belong upstream, in
+[Gitea](https://github.com/go-gitea/gitea).
 
-> [!NOTE]
->
-> 1. **YOU MUST READ THE [CONTRIBUTORS GUIDE](CONTRIBUTING.md) BEFORE STARTING TO WORK ON A PULL REQUEST.**
-> 2. New to the codebase? The [development guide](docs/development.md) walks through setting up a local environment and building from source.
-> 3. If you have found a vulnerability in the project, please write privately to **security@gitea.io**. Thanks!
+Security problems in the updater or the branding: report them privately to the
+maintainers of this repository. Problems in Gitea itself go to Gitea: see [SECURITY.md](SECURITY.md).
 
-## Translating
+## Licence and names
 
-[![Crowdin](https://badges.crowdin.net/gitea/localized.svg)](https://translate.gitea.com)
+BananaGit keeps Gitea's **MIT licence** and copyright notices (see [LICENSE](LICENSE));
+our additions are under the same licence.
 
-Translations are done through [Crowdin](https://translate.gitea.com). If you want to translate to a new language, ask one of the managers in the Crowdin project to add a new language there.
-
-You can also just create an issue for adding a language or ask on Discord on the #translation channel. If you need context or find some translation issues, you can leave a comment on the string or ask on Discord. For general translation questions there is a section in the docs. Currently a bit empty, but we hope to fill it as questions pop up.
-
-Get more information from [documentation](https://docs.gitea.com/contributing/localization).
-
-## Official and Third-Party Projects
-
-We provide an official [go-sdk](https://gitea.com/gitea/go-sdk), a CLI tool called [tea](https://gitea.com/gitea/tea) and an [action runner](https://gitea.com/gitea/act_runner) for Gitea Action.
-
-We maintain a list of Gitea-related projects at [gitea/awesome-gitea](https://gitea.com/gitea/awesome-gitea), where you can discover more third-party projects, including SDKs, plugins, themes, and more.
-
-## Communication
-
-[![](https://img.shields.io/discord/322538954119184384.svg?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/Gitea "Join the Discord chat at https://discord.gg/Gitea")
-
-If you have questions that are not covered by the [documentation](https://docs.gitea.com/), you can get in contact with us on our [Discord server](https://discord.gg/Gitea) or create a post in the [discourse forum](https://forum.gitea.com/).
-
-## Authors
-
-- [Maintainers](https://github.com/orgs/go-gitea/people)
-- [Contributors](https://github.com/go-gitea/gitea/graphs/contributors)
-- [Translators](options/locale/TRANSLATORS)
-
-## Backers
-
-Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/gitea#backer)]
-
-<a href="https://opencollective.com/gitea#backers" target="_blank"><img src="https://opencollective.com/gitea/backers.svg?width=890"></a>
-
-## Sponsors
-
-Support this project by becoming a sponsor. Your logo will show up here with a link to your website. [[Become a sponsor](https://opencollective.com/gitea#sponsor)]
-
-<a href="https://opencollective.com/gitea/sponsor/0/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/1/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/2/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/3/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/4/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/5/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/6/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/7/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/8/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/gitea/sponsor/9/website" target="_blank"><img src="https://opencollective.com/gitea/sponsor/9/avatar.svg"></a>
-
-## FAQ
-
-**How do you pronounce Gitea?**
-
-Gitea is pronounced [/ɡɪ’ti:/](https://youtu.be/EM71-2uDAoY) as in "gi-tea" with a hard g.
-
-**How do I configure Gitea?**
-
-For dynamic config options, you can change it on your admin panel's configuration section.
-
-For static config options, you can edit your `app.ini` file and resart the instance.
-See [app.example.ini](https://github.com/go-gitea/gitea/blob/main/custom/conf/app.example.ini) or [configuration documentation](https://docs.gitea.com/administration/config-cheat-sheet) for more details.
-
-**Where can I find the security patches?**
-
-In the [release log](https://github.com/go-gitea/gitea/releases) or the [change log](https://github.com/go-gitea/gitea/blob/main/CHANGELOG.md), search for the keyword `SECURITY` to find the security patches.
-
-(more FAQs are listed in [FAQ documentation](https://docs.gitea.com/help/faq))
-
-## License
-
-This project is licensed under the MIT License.
-See the [LICENSE](https://github.com/go-gitea/gitea/blob/main/LICENSE) file
-for the full license text.
-
-## Further information
-
-<details>
-<summary>Looking for an overview of the interface? Check it out the screenshots!</summary>
-
-### Login/Register Page
-
-![Login](https://dl.gitea.com/screenshots/login.png)
-![Register](https://dl.gitea.com/screenshots/register.png)
-
-### User Dashboard
-
-![Home](https://dl.gitea.com/screenshots/home.png)
-![Issues](https://dl.gitea.com/screenshots/issues.png)
-![Pull Requests](https://dl.gitea.com/screenshots/pull_requests.png)
-![Milestones](https://dl.gitea.com/screenshots/milestones.png)
-
-### User Profile
-
-![Profile](https://dl.gitea.com/screenshots/user_profile.png)
-
-### Explore
-
-![Repos](https://dl.gitea.com/screenshots/explore_repos.png)
-![Users](https://dl.gitea.com/screenshots/explore_users.png)
-![Orgs](https://dl.gitea.com/screenshots/explore_orgs.png)
-
-### Repository
-
-![Home](https://dl.gitea.com/screenshots/repo_home.png)
-![Commits](https://dl.gitea.com/screenshots/repo_commits.png)
-![Branches](https://dl.gitea.com/screenshots/repo_branches.png)
-![Labels](https://dl.gitea.com/screenshots/repo_labels.png)
-![Milestones](https://dl.gitea.com/screenshots/repo_milestones.png)
-![Releases](https://dl.gitea.com/screenshots/repo_releases.png)
-![Tags](https://dl.gitea.com/screenshots/repo_tags.png)
-
-#### Repository Issue
-
-![List](https://dl.gitea.com/screenshots/repo_issues.png)
-![Issue](https://dl.gitea.com/screenshots/repo_issue.png)
-
-#### Repository Pull Requests
-
-![List](https://dl.gitea.com/screenshots/repo_pull_requests.png)
-![Pull Request](https://dl.gitea.com/screenshots/repo_pull_request.png)
-![File](https://dl.gitea.com/screenshots/repo_pull_request_file.png)
-![Commits](https://dl.gitea.com/screenshots/repo_pull_request_commits.png)
-
-#### Repository Actions
-
-![List](https://dl.gitea.com/screenshots/repo_actions.png)
-![Details](https://dl.gitea.com/screenshots/repo_actions_run.png)
-
-#### Repository Activity
-
-![Activity](https://dl.gitea.com/screenshots/repo_activity.png)
-![Contributors](https://dl.gitea.com/screenshots/repo_contributors.png)
-![Code Frequency](https://dl.gitea.com/screenshots/repo_code_frequency.png)
-![Recent Commits](https://dl.gitea.com/screenshots/repo_recent_commits.png)
-
-### Organization
-
-![Home](https://dl.gitea.com/screenshots/org_home.png)
-
-</details>
+BananaGit is not Gitea and is not endorsed by the Gitea project or Gitea
+Limited. It has its own name and logo (the BananaSuite banana, by Luca Zani)
+and says "Powered by Gitea" where Gitea does.

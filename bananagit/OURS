@@ -1,0 +1,12 @@
+# Files BananaGit replaces entirely. sync-upstream.sh never applies upstream's
+# changes to them, so they cannot conflict. One path per line.
+.github
+README.md
+assets/favicon.svg
+assets/logo.svg
+public/assets/img/apple-touch-icon.png
+public/assets/img/avatar_default.png
+public/assets/img/favicon.png
+public/assets/img/favicon.svg
+public/assets/img/logo.png
+public/assets/img/logo.svg

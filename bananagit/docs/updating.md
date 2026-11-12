@@ -109,7 +109,8 @@ defaults and with the installed version, for example:
 | `health_url` | `http://127.0.0.1:3000/api/healthz` | Must report `pass` after an update |
 | `health_timeout` | `180` | Seconds to wait for it |
 
-Point the service's `ExecStart` at `/opt/bananagit/current web --config …`.
+Point the service's `ExecStart` at `/opt/bananagit/current web --config …`;
+`bananagit/contrib/bananagit.service` is a unit that does.
 
 ## Files the updater keeps
 

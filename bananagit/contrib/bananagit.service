@@ -1,0 +1,18 @@
+# BananaGit under systemd, with the paths bananagit-update expects by default.
+# Copy to /etc/systemd/system/bananagit.service.
+[Unit]
+Description=BananaGit
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=git
+Group=git
+WorkingDirectory=/var/lib/bananagit
+Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/bananagit
+ExecStart=/opt/bananagit/current web --config /etc/bananagit/app.ini
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

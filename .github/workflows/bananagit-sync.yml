@@ -1,7 +1,8 @@
 # BananaGit: follow upstream Gitea.
 #
 # Every day, look for a newer Gitea release of the series main is on. When there
-# is one, apply it on a branch and open a pull request. A maintainer merges it
+# is one, apply it on a branch, build it and open a pull request that says
+# whether the build passed. A maintainer merges it
 # and runs bananagit/scripts/release.sh, which signs the release tag: the signing
 # key never lives in CI, so a compromised workflow cannot release anything that
 # servers with signature checks would install.
@@ -25,14 +26,32 @@ jobs:
           git config user.name "bananagit-sync"
           git config user.email "bananagit-sync@users.noreply.github.com"
           echo "tag=$(bananagit/scripts/sync-upstream.sh)" >> "$GITHUB_OUTPUT"
+      # Built here because pull requests opened by a workflow do not start other workflows.
+      - uses: actions/setup-go@v5
+        if: steps.merge.outputs.tag != ''
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+        if: steps.merge.outputs.tag != ''
+      - uses: actions/setup-node@v4
+        if: steps.merge.outputs.tag != ''
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Build
+        id: build
+        if: steps.merge.outputs.tag != ''
+        continue-on-error: true
+        run: TAGS="sqlite sqlite_unlock_notify" make build
       - name: Open a pull request
         if: steps.merge.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.merge.outputs.tag }}
+          BUILD: ${{ steps.build.outcome }}
         run: |
           branch="sync/gitea-$TAG"
           git ls-remote --exit-code origin "refs/heads/$branch" && exit 0
           git push origin "HEAD:refs/heads/$branch"
           gh pr create --base main --head "$branch" --title "Update to Gitea $TAG" \
-            --body "Upstream released Gitea $TAG. Merge, then run bananagit/scripts/release.sh to sign and publish BananaGit $TAG.1."
+            --body "Upstream released Gitea $TAG; it applied without conflicts and the build result is: $BUILD. Merge, then run bananagit/scripts/release.sh to sign and publish BananaGit $TAG.1."

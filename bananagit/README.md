@@ -19,10 +19,12 @@ Everything of ours is in this short list, so merging an upstream release stays e
 | Default theme, page author and description | `modules/setting/ui.go` (3 lines) |
 | Default name "BananaGit" | `modules/setting/server.go` (1 line) |
 | Footer: "Powered by Gitea (BananaGit)" | `templates/base/footer_content.tmpl` (1 line) |
+| Home page: the install links point to BananaGit | `templates/home.tmpl` (1 line) |
 | Logo and favicon: the suite's banana | `assets/*.svg`, `public/assets/img/{logo,favicon,apple-touch-icon,avatar_default}.*`, made by `bananagit/branding/make-logo.py` |
-| Updater, release, sync and migration scripts, these docs | `bananagit/`, `.github/workflows/bananagit-sync.yml` |
+| Updater, release, sync and migration scripts, a systemd unit, these docs | `bananagit/`, `.github/workflows/bananagit-sync.yml` |
 | Gitea's own CI workflows, issue templates and funding file are removed | `.github/` |
-| A three-line note on top of the README; the default theme named in the example configuration | `README.md`, `custom/conf/app.example.ini` |
+| Our own README in place of Gitea's | `README.md` |
+| A short note on top of Gitea's security policy and translated READMEs | `SECURITY.md`, `README.zh-*.md` |
 
 An administrator can still change name, theme and logo as in Gitea
 (`APP_NAME`, `[ui] DEFAULT_THEME`, `custom/public/assets/img/`).
@@ -33,8 +35,13 @@ To stay small, this repository does not carry Gitea's history: `main` starts
 from a snapshot of one Gitea release (named in `bananagit/UPSTREAM_VERSION`)
 with our commits on top. `bananagit/scripts/sync-upstream.sh` fetches the next
 Gitea release, applies the difference to `main` with a three-way merge and
-commits it. On GitHub a daily workflow (`bananagit-sync`) runs it for patch
-releases of the same series and opens a pull request. A maintainer merges it and runs:
+commits it. Nobody writes code for this: files we replace entirely are listed
+in [OURS](OURS) and skipped, so only the few lines we change inside Gitea's
+own files can ever conflict. `bananagit/scripts/diff-upstream.sh` lists how
+the tree differs from the Gitea release it is based on; anything beyond the
+table above is drift to remove. On GitHub a daily workflow (`bananagit-sync`) runs it for patch
+releases of the same series, builds the result and opens a pull request that
+says whether the build passed. A maintainer merges it and runs:
 
 ```sh
 bananagit/scripts/release.sh     # builds the binaries, creates the signed tag v1.27.4.1
@@ -51,11 +58,13 @@ root. A new minor series is applied by hand:
 
 * [docs/updating.md](docs/updating.md): how servers update, automatic updates, settings, what to do when an update fails.
 * [docs/releasing.md](docs/releasing.md): for maintainers: signing key, building, tagging and publishing a release.
+* [docs/migrating-from-gitea.md](docs/migrating-from-gitea.md): moving a Gitea server to BananaGit.
 * [docs/migrating-from-forgejo.md](docs/migrating-from-forgejo.md): moving a Forgejo server to BananaGit.
 
-## Coming from Forgejo
+## Coming from Gitea or Forgejo
 
-See [docs/migrating-from-forgejo.md](docs/migrating-from-forgejo.md).
+See [docs/migrating-from-gitea.md](docs/migrating-from-gitea.md) and
+[docs/migrating-from-forgejo.md](docs/migrating-from-forgejo.md).
 
 ## Building and trying it
 
