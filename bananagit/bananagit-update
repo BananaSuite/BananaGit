@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the updater with the system Python, from wherever this checkout or copy lives.
+exec env PYTHONPATH="$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" python3 -m updater "$@"

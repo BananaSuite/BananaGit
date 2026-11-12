@@ -1,0 +1,63 @@
+/* BananaGit light: Gitea's light theme in the BananaSuite palette (BananaWiki, BananaChat).
+ *
+ * Only custom properties are overridden. Palette: primary #8a6500, accent #6f5000,
+ * background #faf9f5, sidebar #f4f1e8, surfaces #ffffff, text #202124.
+ */
+@import "./theme-gitea-light.css";
+
+gitea-theme-meta-info {
+  --theme-display-name: "BananaGit Light";
+  --theme-color-scheme: "light";
+}
+
+:root {
+  --color-primary: #8a6500;
+  --color-primary-contrast: #ffffff;
+  --color-primary-dark-1: #7c5b00;
+  --color-primary-dark-2: #6f5000;
+  --color-primary-dark-3: #614600;
+  --color-primary-dark-4: #533c00;
+  --color-primary-dark-5: #372800;
+  --color-primary-dark-6: #1c1400;
+  --color-primary-dark-7: #080600;
+  --color-primary-light-1: #a67c0a;
+  --color-primary-light-2: #c2951a;
+  --color-primary-light-3: #d9ae2c;
+  --color-primary-light-4: #e9cb62;
+  --color-primary-light-5: #f1dc94;
+  --color-primary-light-6: #f8ecc4;
+  --color-primary-light-7: #fdf7e3;
+  --color-primary-alpha-10: #8a650019;
+  --color-primary-alpha-20: #8a650033;
+  --color-primary-alpha-30: #8a65004b;
+  --color-primary-alpha-40: #8a650066;
+  --color-primary-alpha-50: #8a650080;
+  --color-primary-alpha-60: #8a650099;
+  --color-primary-alpha-70: #8a6500b3;
+  --color-primary-alpha-80: #8a6500cc;
+  --color-primary-alpha-90: #8a6500e1;
+  --color-secondary: #dad5c7;
+  --color-secondary-dark-1: #cfcabb;
+  --color-secondary-light-1: #e3dfd2;
+  --color-secondary-light-2: #ece8dc;
+  --color-secondary-light-3: #f4f1e8;
+  --color-secondary-light-4: #faf9f5;
+  --color-body: #faf9f5;
+  --color-box-header: #f4f1e8;
+  --color-box-body: #ffffff;
+  --color-text-dark: #101112;
+  --color-text: #202124;
+  --color-text-light: #3b3933;
+  --color-text-light-1: #45423b;
+  --color-text-light-2: #5f5b51;
+  --color-text-light-3: #6e6a5f;
+  --color-timeline: #dad5c7;
+  --color-menu: #ffffff;
+  --color-card: #ffffff;
+  --color-button: #ffffff;
+  --color-code-bg: #ffffff;
+  --color-secondary-bg: #f4f1e8;
+  --color-nav-bg: #f4f1e8;
+  --color-secondary-nav-bg: #f7f5ee;
+  --color-accent: #8a6500;
+}

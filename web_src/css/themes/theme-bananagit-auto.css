@@ -1,0 +1,8 @@
+/* BananaGit: light or dark, following the system setting. */
+@import "./theme-bananagit-light.css" (prefers-color-scheme: light);
+@import "./theme-bananagit-dark.css" (prefers-color-scheme: dark);
+
+gitea-theme-meta-info {
+  --theme-display-name: "BananaGit";
+  --theme-color-scheme: "auto";
+}

@@ -1,0 +1,87 @@
+/* BananaGit dark: Gitea's dark theme in the BananaSuite palette (BananaWiki, BananaChat).
+ *
+ * Only custom properties are overridden, so everything else follows upstream's
+ * theme-gitea-dark.css. Palette: primary #e6be32, accent #cda624, background #141414,
+ * sidebar #181818, raised #1d1d1d, text #ededed.
+ */
+@import "./theme-gitea-dark.css";
+
+gitea-theme-meta-info {
+  --theme-display-name: "BananaGit Dark";
+  --theme-color-scheme: "dark";
+}
+
+:root {
+  --color-primary: #e6be32;
+  --color-primary-contrast: #000000;
+  --color-primary-dark-1: #e9c649;
+  --color-primary-dark-2: #ecce60;
+  --color-primary-dark-3: #f0d570;
+  --color-primary-dark-4: #f3dd8b;
+  --color-primary-dark-5: #f6e4a1;
+  --color-primary-dark-6: #faf0cc;
+  --color-primary-dark-7: #fdf9ec;
+  --color-primary-light-1: #cda624;
+  --color-primary-light-2: #b08e1c;
+  --color-primary-light-3: #8a6f14;
+  --color-primary-light-4: #6b5610;
+  --color-primary-light-5: #4f400c;
+  --color-primary-light-6: #2b2306;
+  --color-primary-light-7: #100d02;
+  --color-primary-alpha-10: #e6be3219;
+  --color-primary-alpha-20: #e6be3233;
+  --color-primary-alpha-30: #e6be324b;
+  --color-primary-alpha-40: #e6be3266;
+  --color-primary-alpha-50: #e6be3280;
+  --color-primary-alpha-60: #e6be3299;
+  --color-primary-alpha-70: #e6be32b3;
+  --color-primary-alpha-80: #e6be32cc;
+  --color-primary-alpha-90: #e6be32e1;
+  --color-secondary: #3a3a3a;
+  --color-secondary-dark-1: #414141;
+  --color-secondary-dark-2: #4a4a4a;
+  --color-secondary-dark-3: #585858;
+  --color-secondary-dark-4: #686868;
+  --color-secondary-dark-5: #767676;
+  --color-secondary-dark-6: #848484;
+  --color-secondary-dark-7: #939393;
+  --color-secondary-dark-8: #a2a2a2;
+  --color-secondary-dark-9: #aaaaaa;
+  --color-secondary-dark-10: #b8b8b8;
+  --color-secondary-dark-11: #c6c6c6;
+  --color-secondary-dark-12: #d2d2d2;
+  --color-secondary-dark-13: #d6d6d6;
+  --color-secondary-light-1: #2e2e2e;
+  --color-secondary-light-2: #262626;
+  --color-secondary-light-3: #1d1d1d;
+  --color-secondary-light-4: #181818;
+  --color-secondary-alpha-10: #3a3a3a19;
+  --color-secondary-alpha-20: #3a3a3a33;
+  --color-secondary-alpha-30: #3a3a3a4b;
+  --color-secondary-alpha-40: #3a3a3a66;
+  --color-secondary-alpha-50: #3a3a3a80;
+  --color-secondary-alpha-60: #3a3a3a99;
+  --color-secondary-alpha-70: #3a3a3ab3;
+  --color-secondary-alpha-80: #3a3a3acc;
+  --color-secondary-alpha-90: #3a3a3ae1;
+  --color-console-bg: #181818;
+  --color-body: #141414;
+  --color-box-header: #1d1d1d;
+  --color-box-body: #181818;
+  --color-text-dark: #ffffff;
+  --color-text: #ededed;
+  --color-text-light: #d2d2d2;
+  --color-text-light-1: #b8b8b8;
+  --color-text-light-2: #a2a2a2;
+  --color-text-light-3: #8a8a8a;
+  --color-timeline: #2e2e2e;
+  --color-input-background: #1d1d1d;
+  --color-menu: #1d1d1d;
+  --color-card: #1d1d1d;
+  --color-button: #1d1d1d;
+  --color-code-bg: #181818;
+  --color-secondary-bg: #262626;
+  --color-nav-bg: #181818;
+  --color-secondary-nav-bg: #161616;
+  --color-accent: #e6be32;
+}

@@ -1,0 +1,38 @@
+# BananaGit: follow upstream Gitea.
+#
+# Every day, look for a newer Gitea release of the series main is on. When there
+# is one, apply it on a branch and open a pull request. A maintainer merges it
+# and runs bananagit/scripts/release.sh, which signs the release tag: the signing
+# key never lives in CI, so a compromised workflow cannot release anything that
+# servers with signature checks would install.
+name: bananagit-sync
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  sync:
+    if: github.repository == 'BananaSuite/BananaGit'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Merge the newest upstream release
+        id: merge
+        run: |
+          git config user.name "bananagit-sync"
+          git config user.email "bananagit-sync@users.noreply.github.com"
+          echo "tag=$(bananagit/scripts/sync-upstream.sh)" >> "$GITHUB_OUTPUT"
+      - name: Open a pull request
+        if: steps.merge.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.merge.outputs.tag }}
+        run: |
+          branch="sync/gitea-$TAG"
+          git ls-remote --exit-code origin "refs/heads/$branch" && exit 0
+          git push origin "HEAD:refs/heads/$branch"
+          gh pr create --base main --head "$branch" --title "Update to Gitea $TAG" \
+            --body "Upstream released Gitea $TAG. Merge, then run bananagit/scripts/release.sh to sign and publish BananaGit $TAG.1."
