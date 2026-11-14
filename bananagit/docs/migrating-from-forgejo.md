@@ -23,6 +23,10 @@ generic package.
   adds them first.
 * With it, Gitea ran its migrations (database version 305 to 343), the health
   check passed, every row count matched and nothing was logged as an error.
+* On PostgreSQL, Forgejo's foreign keys referencing `repository` survive the
+  move. BananaGit deletes the repository row before the rows that reference
+  it, so deleting a repository fails with `access_repo_id_fkey` (error 23503)
+  and an HTTP 500. `migration/forgejo-postgres-fk.sql` drops them.
 * Everything listed above was read back through the API and the web pages,
   the package file downloaded, and `git clone` returned all commits.
 * `forgejo-pre.sql` also turns webhooks of type `forgejo` into `gitea` and
@@ -76,6 +80,13 @@ database, but nothing uses it:
 
    ```sh
    sqlite3 /var/lib/forgejo/data/forgejo.db < bananagit/migration/forgejo-pre.sql   # or: psql -d forgejo -f …
+   ```
+
+   On PostgreSQL, also drop the foreign keys that Forgejo added to
+   `repository`:
+
+   ```sh
+   psql -d forgejo -f bananagit/migration/forgejo-postgres-fk.sql
    ```
 
 4. **Settle the paths in `app.ini`** so BananaGit finds what Forgejo wrote:
