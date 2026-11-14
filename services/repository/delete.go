@@ -98,10 +98,6 @@ func DeleteRepositoryDirectly(ctx context.Context, repoID int64, ignoreOrgTeams 
 	}
 	needRewriteKeysFile := deleted > 0
 
-	if err := deleteDBRepository(ctx, repoID); err != nil {
-		return err
-	}
-
 	if org != nil && org.IsOrganization() {
 		teams, err := organization.FindOrgTeams(ctx, org.ID)
 		if err != nil {
@@ -298,6 +294,14 @@ func DeleteRepositoryDirectly(ctx context.Context, repoID int64, ignoreOrgTeams 
 
 	// unlink packages linked to this repository
 	if err = packages_model.UnlinkRepositoryFromAllPackages(ctx, repoID); err != nil {
+		return err
+	}
+
+	// Delete the repository row last, after everything that references it.
+	// Gitea does not create foreign keys, but a database migrated from Forgejo
+	// still has them (for example access_repo_id_fkey). Deleting the row early
+	// makes PostgreSQL reject the transaction with a foreign-key violation.
+	if err := deleteDBRepository(ctx, repoID); err != nil {
 		return err
 	}
 
