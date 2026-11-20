@@ -112,6 +112,11 @@ function initAdminAuthentication() {
     }
 
     const provider = document.querySelector<HTMLInputElement>('#oauth2_provider')!.value;
+    const elAuthName = document.querySelector<HTMLInputElement>('#auth_name')!;
+    if (applyDefaultValues && provider === 'bananawiki' && !elAuthName.value) { // BananaGit: the name is part of the redirect URI
+      elAuthName.value = 'BananaWiki';
+      elAuthName.dispatchEvent(new Event('input'));
+    }
     switch (provider) {
       case 'openidConnect':
       case 'aws-cognito':

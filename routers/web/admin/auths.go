@@ -270,6 +270,9 @@ func NewAuthSourcePost(ctx *context.Context) {
 	case auth.OAuth2:
 		config = parseOAuth2Config(form)
 		oauth2Config := config.(*oauth2.Source)
+		if checkBananaWikiSourceName(ctx, oauth2Config, form, tplAuthNew) { // BananaGit
+			return
+		}
 		if oauth2Config.Provider == "openidConnect" {
 			discoveryURL, err := url.Parse(oauth2Config.OpenIDConnectAutoDiscoveryURL)
 			if err != nil || (discoveryURL.Scheme != "http" && discoveryURL.Scheme != "https") {
@@ -400,6 +403,9 @@ func EditAuthSourcePost(ctx *context.Context) {
 	case auth.OAuth2:
 		config = parseOAuth2Config(form)
 		oauth2Config := config.(*oauth2.Source)
+		if checkBananaWikiSourceName(ctx, oauth2Config, form, tplAuthEdit) { // BananaGit
+			return
+		}
 		if oauth2Config.Provider == "openidConnect" {
 			discoveryURL, err := url.Parse(oauth2Config.OpenIDConnectAutoDiscoveryURL)
 			if err != nil || (discoveryURL.Scheme != "http" && discoveryURL.Scheme != "https") {

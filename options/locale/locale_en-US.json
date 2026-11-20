@@ -3251,6 +3251,7 @@
   "admin.auths.login_source_exist": "The authentication source \"%s\" already exists.",
   "admin.auths.login_source_of_type_exist": "An authentication source of this type already exists.",
   "admin.auths.unable_to_initialize_openid": "Unable to initialize OpenID Connect Provider: %s",
+  "admin.auths.bananawiki_invalid_name": "For BananaWiki Hosting, the authentication name may only contain letters, digits, \".\", \"-\" and \"_\" (for example \"BananaWiki\"): it becomes part of the redirect URI, which the portal compares exactly.",
   "admin.auths.invalid_openIdConnectAutoDiscoveryURL": "Invalid Auto Discovery URL (this must be a valid URL starting with http:// or https://)",
   "admin.config.server_config": "Server Configuration",
   "admin.config.app_name": "Site Title",

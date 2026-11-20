@@ -29,9 +29,9 @@ https://<your BananaGit>/user/oauth2/<authentication name>/callback
 ```
 
 * `<your BananaGit>` is Gitea's `ROOT_URL` (with its sub-path, if any).
-* `<authentication name>` is the name you give the source in step 2. Pick
-  one without spaces, e.g. `BananaWiki`: it also appears on the sign-in
-  button ("Sign in with BananaWiki").
+* `<authentication name>` is the name you give the source in step 2:
+  `BananaWiki` unless you change it. It also appears on the sign-in button
+  ("Sign in with BananaWiki").
 * The portal compares redirect URIs exactly: same letter case, no trailing
   slash. Once you type the name in step 2, the admin form shows the exact URI
   under "Tips".
@@ -48,7 +48,7 @@ Authentication Source**:
 | Field | Value |
 | --- | --- |
 | Authentication Type | OAuth2 |
-| Authentication Name | `BananaWiki` (the name used in the redirect URI) |
+| Authentication Name | `BananaWiki` (the name used in the redirect URI; filled in when you pick the provider). Only letters, digits, `.`, `-` and `_` are accepted: a name that needs escaping, such as `BananaWiki Auth`, would give a redirect URI the portal refuses |
 | OAuth2 Provider | BananaWiki Hosting |
 | Client ID (Key) / Client Secret | from step 1 |
 | Icon URL | optional; without it a book icon is shown |
