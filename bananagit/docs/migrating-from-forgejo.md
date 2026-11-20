@@ -23,10 +23,13 @@ generic package.
   adds them first.
 * With it, Gitea ran its migrations (database version 305 to 343), the health
   check passed, every row count matched and nothing was logged as an error.
-* On PostgreSQL, Forgejo's foreign keys referencing `repository` survive the
-  move. BananaGit deletes the repository row before the rows that reference
-  it, so deleting a repository fails with `access_repo_id_fkey` (error 23503)
-  and an HTTP 500. `migration/forgejo-postgres-fk.sql` drops them.
+* On PostgreSQL, Forgejo's foreign keys survive the move. Gitea creates none
+  and does not write in an order that respects them, so they reject ordinary
+  writes with error 23503 and an HTTP 500: deleting a repository
+  (`access_repo_id_fkey`), a user or an issue, or creating a site-wide runner
+  token, which Gitea stores with owner 0 (`action_runner_token_owner_id_fkey`).
+  BananaGit drops every foreign key in its schema each time it starts, before
+  the migrations run, and logs each one it drops.
 * Everything listed above was read back through the API and the web pages,
   the package file downloaded, and `git clone` returned all commits.
 * `forgejo-pre.sql` also turns webhooks of type `forgejo` into `gitea` and
@@ -82,8 +85,9 @@ database, but nothing uses it:
    sqlite3 /var/lib/forgejo/data/forgejo.db < bananagit/migration/forgejo-pre.sql   # or: psql -d forgejo -f …
    ```
 
-   On PostgreSQL, also drop the foreign keys that Forgejo added to
-   `repository`:
+   On PostgreSQL, BananaGit drops Forgejo's foreign keys itself when it
+   starts. Only versions before that change need
+   `migration/forgejo-postgres-fk.sql`, which drops the ones on `repository`:
 
    ```sh
    psql -d forgejo -f bananagit/migration/forgejo-postgres-fk.sql

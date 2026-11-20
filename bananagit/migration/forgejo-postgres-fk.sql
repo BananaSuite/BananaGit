@@ -6,6 +6,11 @@
 -- tables such as access_token_resource_repo are never removed by BananaGit.
 -- Dropping these constraints restores the schema BananaGit expects.
 --
+-- BananaGit now drops every foreign key in its schema at each start
+-- (models/db/bananagit_foreign_keys.go), including the ones on "user" and
+-- issue that broke runner tokens and user or issue deletes. This file is
+-- only needed with older BananaGit versions.
+--
 -- SQLite does not need this file and does not support DROP CONSTRAINT.
 
 ALTER TABLE IF EXISTS access DROP CONSTRAINT IF EXISTS access_repo_id_fkey;

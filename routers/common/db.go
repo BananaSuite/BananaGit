@@ -41,6 +41,7 @@ func InitDBEngine(ctx context.Context) (err error) {
 }
 
 func migrateWithSetting(ctx context.Context, x db.EngineMigration) error {
+	db.DropForeignKeys(x) // BananaGit: Forgejo's foreign keys break Gitea's writes and migrations
 	if setting.Database.AutoMigration {
 		return versioned_migration.Migrate(ctx, x)
 	}
