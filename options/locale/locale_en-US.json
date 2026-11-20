@@ -3224,6 +3224,7 @@
   "admin.auths.tips.oauth2.general": "OAuth2 Authentication",
   "admin.auths.tips.oauth2.general.tip": "When registering a new OAuth2 authentication, the callback/redirect URL should be:",
   "admin.auths.tip.oauth2_provider": "OAuth2 Provider",
+  "admin.auths.tip.bananawiki": "Register an app in the BananaWiki Hosting portal under \"Account → Developer apps\" with the redirect URI \"https://{your BananaGit}/user/oauth2/{authentication name}/callback\" (use an authentication name without spaces, e.g. \"BananaWiki\": it is also shown on the sign-in button), then paste its client ID and client secret here. Keep the default URLs unless your portal is self-hosted.",
   "admin.auths.tip.bitbucket": "Register a new OAuth consumer on %s and add the permission 'Account' - 'Read'",
   "admin.auths.tip.nextcloud": "Register a new OAuth consumer on your instance by selecting \"Settings -> Security -> OAuth 2.0 client\" in the menu",
   "admin.auths.tip.dropbox": "Create a new application at %s",

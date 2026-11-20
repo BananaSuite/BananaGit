@@ -21,6 +21,7 @@ Everything of ours is in this short list, so merging an upstream release stays e
 | Footer: "Powered by Gitea (BananaGit)" | `templates/base/footer_content.tmpl` (1 line) |
 | Home page: the install links point to BananaGit | `templates/home.tmpl` (1 line) |
 | Logo and favicon: the suite's banana | `assets/*.svg`, `public/assets/img/{logo,favicon,apple-touch-icon,avatar_default}.*`, made by `bananagit/branding/make-logo.py` |
+| Sign-in with BananaWiki Hosting: a new OAuth2 provider, its admin tip (English) and icon mapping | `services/auth/source/oauth2/bananawiki/`, `services/auth/source/oauth2/providers_{custom,base}.go`, `templates/admin/auth/new.tmpl`, `options/locale/locale_en-US.json` (a few lines each) |
 | Updater, release, sync and migration scripts, a systemd unit, these docs | `bananagit/`, `.github/workflows/bananagit-sync.yml` |
 | Gitea's own CI workflows, issue templates and funding file are removed | `.github/` |
 | Our own README in place of Gitea's | `README.md` |
@@ -60,6 +61,7 @@ root. A new minor series is applied by hand:
 * [docs/releasing.md](docs/releasing.md): for maintainers: signing key, building, tagging and publishing a release.
 * [docs/migrating-from-gitea.md](docs/migrating-from-gitea.md): moving a Gitea server to BananaGit.
 * [docs/migrating-from-forgejo.md](docs/migrating-from-forgejo.md): moving a Forgejo server to BananaGit.
+* [docs/bananawiki-hosting-login.md](docs/bananawiki-hosting-login.md): signing in with BananaWiki Hosting accounts, and making it the only way in.
 
 ## Coming from Gitea or Forgejo
 

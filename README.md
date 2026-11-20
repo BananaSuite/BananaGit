@@ -206,6 +206,7 @@ linting and testing.
 | Releasing (maintainers) | [bananagit/docs/releasing.md](bananagit/docs/releasing.md) |
 | Migrating from Gitea | [bananagit/docs/migrating-from-gitea.md](bananagit/docs/migrating-from-gitea.md) |
 | Migrating from Forgejo | [bananagit/docs/migrating-from-forgejo.md](bananagit/docs/migrating-from-forgejo.md) |
+| Signing in with BananaWiki Hosting | [bananagit/docs/bananawiki-hosting-login.md](bananagit/docs/bananawiki-hosting-login.md) |
 
 ## Contributing
 

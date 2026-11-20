@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"gitea.dev/modules/setting"
+	"gitea.dev/services/auth/source/oauth2/bananawiki"
 
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/providers/azureadv2"
@@ -84,6 +85,16 @@ func init() {
 		},
 		func(clientID, secret, callbackURL string, custom *CustomURLMapping, scopes []string) (goth.Provider, error) {
 			return gitea.NewCustomisedURL(clientID, secret, callbackURL, custom.AuthURL, custom.TokenURL, custom.ProfileURL, scopes...), nil
+		}))
+
+	RegisterGothProvider(NewCustomProvider(
+		"bananawiki", "BananaWiki Hosting", &CustomURLSettings{
+			AuthURL:    requiredAttribute(bananawiki.AuthURL),
+			TokenURL:   requiredAttribute(bananawiki.TokenURL),
+			ProfileURL: requiredAttribute(bananawiki.ProfileURL),
+		},
+		func(clientID, secret, callbackURL string, custom *CustomURLMapping, scopes []string) (goth.Provider, error) {
+			return bananawiki.NewCustomisedURL(clientID, secret, callbackURL, custom.AuthURL, custom.TokenURL, custom.ProfileURL, scopes...), nil
 		}))
 
 	RegisterGothProvider(NewCustomProvider(

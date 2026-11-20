@@ -41,6 +41,8 @@ func (b *BaseProvider) IconHTML(size int) template.HTML {
 		svgName = "gitea-google"
 	case "github":
 		svgName = "octicon-mark-github"
+	case "bananawiki":
+		svgName = "octicon-book"
 	}
 	svgHTML := svg.RenderHTML(svgName, size)
 	if svgHTML == "" {
