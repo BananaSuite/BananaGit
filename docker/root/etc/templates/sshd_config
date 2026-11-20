@@ -7,6 +7,7 @@ ListenAddress ::
 
 ${SSH_MAX_STARTUPS}
 ${SSH_MAX_SESSIONS}
+${SSH_PER_SOURCE_PENALTIES}
 
 LogLevel ${SSH_LOG_LEVEL}
 

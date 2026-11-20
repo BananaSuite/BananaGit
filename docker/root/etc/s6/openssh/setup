@@ -46,6 +46,9 @@ if [ -e /data/ssh/ssh_host_ecdsa_key-cert.pub ]; then
   SSH_ECDSA_CERT=${SSH_ECDSA_CERT:-"/data/ssh/ssh_host_ecdsa_key-cert.pub"}
 fi
 
+# BananaGit: sshd only takes public keys for the git user, so OpenSSH's per-source penalties
+# (on by default since 9.8) add little; behind Docker's proxy, a shared NAT or the host itself,
+# one failed key locked out everyone on that address. Set SSH_PER_SOURCE_PENALTIES to re-enable.
 if [ -d /etc/ssh ]; then
     SSH_PORT=${SSH_PORT:-"22"} \
     SSH_LISTEN_PORT=${SSH_LISTEN_PORT:-"${SSH_PORT}"} \
@@ -54,6 +57,7 @@ if [ -d /etc/ssh ]; then
     SSH_ECDSA_CERT="${SSH_ECDSA_CERT:+"HostCertificate "}${SSH_ECDSA_CERT}" \
     SSH_MAX_STARTUPS="${SSH_MAX_STARTUPS:+"MaxStartups "}${SSH_MAX_STARTUPS}" \
     SSH_MAX_SESSIONS="${SSH_MAX_SESSIONS:+"MaxSessions "}${SSH_MAX_SESSIONS}" \
+    SSH_PER_SOURCE_PENALTIES="PerSourcePenalties ${SSH_PER_SOURCE_PENALTIES:-no}" \
     SSH_INCLUDE_FILE="${SSH_INCLUDE_FILE:+"Include "}${SSH_INCLUDE_FILE}" \
     SSH_LOG_LEVEL=${SSH_LOG_LEVEL:-"INFO"} \
     envsubst < /etc/templates/sshd_config > /etc/ssh/sshd_config
