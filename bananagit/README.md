@@ -22,6 +22,7 @@ Everything of ours is in this short list, so merging an upstream release stays e
 | Home page: the install links point to BananaGit | `templates/home.tmpl` (1 line) |
 | Logo and favicon: the suite's banana | `assets/*.svg`, `public/assets/img/{logo,favicon,apple-touch-icon,avatar_default}.*`, made by `bananagit/branding/make-logo.py` |
 | Sign-in with BananaWiki Hosting: a new OAuth2 provider, its admin tip (English) and icon mapping | `services/auth/source/oauth2/bananawiki/`, `services/auth/source/oauth2/providers_{custom,base}.go`, `templates/admin/auth/new.tmpl`, `options/locale/locale_en-US.json` (a few lines each) |
+| Easter eggs (the BananaSuite `banana-eggs/v1` format): settings, cleaner and its test vectors, find and page routes, admin editor, page templates, the suite's three shared front-end files (byte-identical copies) and English strings | new: `modules/setting/bananagit_eggs*.go`, `modules/setting/testdata/bananagit-eggs-vectors.json`, `routers/web/bananagit/`, `templates/bananagit/`, `templates/admin/config_settings/bananagit_eggs.tmpl`, `public/assets/bananagit/`; hooks: `routers/web/web.go` (2 lines), `templates/base/head.tmpl` (1 line), `templates/admin/config_settings/config_settings.tmpl` (1 line), `options/locale/locale_en-US.json` (a block of `bananagit.eggs.*` keys) |
 | Updater, release, sync and migration scripts, a systemd unit, these docs | `bananagit/`, `.github/workflows/bananagit-sync.yml` |
 | Gitea's own CI workflows, issue templates and funding file are removed | `.github/` |
 | Our own README in place of Gitea's | `README.md` |
@@ -62,6 +63,7 @@ root. A new minor series is applied by hand:
 * [docs/migrating-from-gitea.md](docs/migrating-from-gitea.md): moving a Gitea server to BananaGit.
 * [docs/migrating-from-forgejo.md](docs/migrating-from-forgejo.md): moving a Forgejo server to BananaGit.
 * [docs/bananawiki-hosting-login.md](docs/bananawiki-hosting-login.md): signing in with BananaWiki Hosting accounts, and making it the only way in.
+* [docs/easter-eggs.md](docs/easter-eggs.md): the easter eggs, where they are stored and how to update the shared files.
 
 ## Coming from Gitea or Forgejo
 

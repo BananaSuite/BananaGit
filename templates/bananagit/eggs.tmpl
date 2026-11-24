@@ -1,0 +1,32 @@
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content bananagit-eggs">
+	<div class="ui container">
+		{{template "base/alert" .}}
+		<h2 class="ui header">{{ctx.Locale.Tr "bananagit.eggs.title"}}</h2>
+		<p>{{ctx.Locale.Tr "bananagit.eggs.intro"}}</p>
+		{{if not .IsSigned}}
+		<div class="ui info message">
+			{{ctx.Locale.Tr "bananagit.eggs.sign_in_hint"}}
+			<a href="{{AppSubUrl}}/user/login?redirect_to={{AppSubUrl}}/-/bananagit/eggs">{{ctx.Locale.Tr "sign_in"}}</a>
+		</div>
+		{{end}}
+		{{if .BananaGitEggRows}}
+		<p>{{ctx.Locale.Tr "bananagit.eggs.count" (HTMLFormat `<strong data-banana-eggs-count>%d</strong>` .BananaGitEggsFound) .BananaGitEggsTotal}}{{if not .IsSigned}} {{ctx.Locale.Tr "bananagit.eggs.this_browser"}}{{end}}</p>
+		<div class="ui divided list" data-banana-eggs-page>
+			{{range .BananaGitEggRows}}
+			<div class="item" id="egg-{{.ID}}" data-banana-eggs-id="{{.ID}}">
+				<span data-banana-eggs-found {{if not .Found}}hidden{{end}}>
+					{{.Emoji}} <strong>{{.ID}}</strong>{{if .Message}} · {{.Message}}{{end}} ·
+					<span data-banana-eggs-date>{{if .Found}}{{DateUtils.AbsoluteShort .Found}}{{end}}</span>
+				</span>
+				<span data-banana-eggs-unknown {{if .Found}}hidden{{end}}>?</span>
+			</div>
+			{{end}}
+		</div>
+		{{else}}
+		<p>{{ctx.Locale.Tr "bananagit.eggs.none"}}</p>
+		{{end}}
+	</div>
+</div>
+{{if not .IsSigned}}<script src="{{AssetUrlPrefix}}/bananagit/eggs-page.js?v={{AppVer}}" defer nonce="{{ctx.CspScriptNonce}}"></script>{{end}}
+{{template "base/footer" .}}

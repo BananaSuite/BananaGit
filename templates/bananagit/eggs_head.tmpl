@@ -1,0 +1,6 @@
+{{/* BananaGit: the BananaSuite easter eggs (banana-eggs/v1), included from base/head. Nothing when they are off. */}}
+{{with .BananaGitEggs}}{{if .On}}
+	<script type="application/json" id="banana-eggs">{{.HeadJSON}}</script>
+	<link rel="stylesheet" href="{{AssetUrlPrefix}}/bananagit/banana-eggs.css?v={{AppVer}}">
+	<script src="{{AssetUrlPrefix}}/bananagit/banana-eggs.js?v={{AppVer}}" defer nonce="{{ctx.CspScriptNonce}}"></script>
+{{end}}{{end}}

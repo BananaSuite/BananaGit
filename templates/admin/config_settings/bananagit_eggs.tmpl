@@ -1,0 +1,33 @@
+{{/* BananaGit: the easter egg editor (the shared banana-eggs-admin.js), saved by POST /-/admin/config/bananagit-eggs */}}
+{{with .BananaGitEggs}}
+<h4 class="ui top attached header" id="bananagit-eggs">{{ctx.Locale.Tr "bananagit.eggs.admin.title"}}</h4>
+<div class="ui attached segment">
+	<form class="ui form ignore-dirty" method="post" action="{{AppSubUrl}}/-/admin/config/bananagit-eggs">
+		<p>{{ctx.Locale.Tr "bananagit.eggs.admin.desc"}} <a href="{{AppSubUrl}}/-/bananagit/eggs">{{ctx.Locale.Tr "bananagit.eggs.admin.page_link"}}</a> · <a href="{{AppSubUrl}}/-/admin/badges">{{ctx.Locale.Tr "bananagit.eggs.admin.badges_link"}}</a></p>
+		{{with .AdminErrors}}
+		<div class="ui negative message">
+			<div class="header">{{ctx.Locale.Tr "bananagit.eggs.admin.not_saved"}}</div>
+			<ul class="list">{{range .}}<li>{{.}}</li>{{end}}</ul>
+		</div>
+		{{end}}
+		<div class="field">
+			<div class="ui checkbox">
+				<input type="checkbox" id="bananagit-eggs-enabled" name="enabled" value="true" {{if .AdminEnabled}}checked{{end}}>
+				<label for="bananagit-eggs-enabled">{{ctx.Locale.Tr "bananagit.eggs.admin.enabled"}}</label>
+			</div>
+		</div>
+		<input type="hidden" id="bananagit-eggs-config" name="config" value="{{.AdminStoredJSON}}">
+		<div class="banana-eggs-editor" data-banana-eggs-editor data-input="bananagit-eggs-config">
+			<script type="application/json" data-banana-eggs-editor-options>{{.AdminEditorOptions}}</script>
+		</div>
+		<div class="field">
+			<button class="ui primary button">{{ctx.Locale.Tr "save"}}</button>
+		</div>
+	</form>
+</div>
+{{if not .On}}{{/* base/head loads the runtime only while the eggs are on; the editor previews through it */}}
+<link rel="stylesheet" href="{{AssetUrlPrefix}}/bananagit/banana-eggs.css?v={{AppVer}}">
+<script src="{{AssetUrlPrefix}}/bananagit/banana-eggs.js?v={{AppVer}}" defer nonce="{{ctx.CspScriptNonce}}"></script>
+{{end}}
+<script src="{{AssetUrlPrefix}}/bananagit/banana-eggs-admin.js?v={{AppVer}}" defer nonce="{{ctx.CspScriptNonce}}"></script>
+{{end}}

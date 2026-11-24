@@ -27,6 +27,7 @@ import (
 	"gitea.dev/routers/common"
 	"gitea.dev/routers/web/admin"
 	"gitea.dev/routers/web/auth"
+	"gitea.dev/routers/web/bananagit"
 	"gitea.dev/routers/web/devtest"
 	"gitea.dev/routers/web/events"
 	"gitea.dev/routers/web/explore"
@@ -337,6 +338,7 @@ func registerWebRoutes(m *web.Router, webAuth *AuthMiddleware) {
 	optExploreSignIn := verifyAuthWithOptions(&common.VerifyOptions{SignInRequired: setting.Service.RequireSignInViewStrict || setting.Service.Explore.RequireSigninView})
 	// middleware: only apply CrossOriginProtection
 	crossOriginProtect := verifyAuthWithOptions(&common.VerifyOptions{DisableCrossOriginProtection: false})
+	bananagit.RegisterRoutes(m, optSignIn, reqSignIn, verifyAuthWithOptions(&common.VerifyOptions{SignInRequired: true, AdminRequired: true})) // BananaGit: easter eggs
 
 	openIDSignInEnabled := func(ctx *context.Context) {
 		if !setting.Service.EnableOpenIDSignIn {

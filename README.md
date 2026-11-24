@@ -49,6 +49,7 @@ in this folder (`data/`, `custom/`). For a real server, see [Install](#install).
 | Versions | `vX.Y.Z` | `vX.Y.Z.N`: Gitea's version plus our counter, e.g. `v1.27.3.1` |
 | Release binaries | Many platforms, SQLite included | `linux-amd64` and `linux-arm64`, built without SQLite by default |
 | Forgejo | No supported path | A tested, rehearsable in-place migration |
+| Easter eggs | None | The BananaSuite easter eggs: key sequences an administrator designs (Site Administration → Configuration → Settings), an easter egg page, optional badges |
 | Repository | Full history, Gitea's CI | A snapshot of one Gitea release with our commits on top; Gitea's CI workflows, issue templates and funding file are removed |
 
 Everything else, including every setting, is Gitea's. An administrator can
@@ -207,6 +208,7 @@ linting and testing.
 | Migrating from Gitea | [bananagit/docs/migrating-from-gitea.md](bananagit/docs/migrating-from-gitea.md) |
 | Migrating from Forgejo | [bananagit/docs/migrating-from-forgejo.md](bananagit/docs/migrating-from-forgejo.md) |
 | Signing in with BananaWiki Hosting | [bananagit/docs/bananawiki-hosting-login.md](bananagit/docs/bananawiki-hosting-login.md) |
+| Easter eggs | [bananagit/docs/easter-eggs.md](bananagit/docs/easter-eggs.md) |
 
 ## Contributing
 
