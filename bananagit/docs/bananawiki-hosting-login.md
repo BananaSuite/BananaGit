@@ -73,6 +73,8 @@ People with an existing BananaGit account link it in **Settings → Security →
 Manage Linked Accounts → Link Account**. Someone signing in with an unknown
 portal account gets Gitea's "link account" page: create a new account, or
 connect an existing one by entering its password (and its two-factor code).
+That page takes the password with `SIGNIN_MODE = hosting` too: the mode hides
+the password form on the sign-in page, not here.
 
 An administrator can also link accounts: **Site Administration → Identity &
 Access → Account links** (next section).
@@ -155,8 +157,10 @@ out](#do-not-lock-yourself-out)):
 SIGNIN_MODE = hosting
 
 [service]
-; no local sign-up page; keep DISABLE_REGISTRATION = false, or nobody new can get in
+; no local sign-up page: anyone with a portal account gets a BananaGit account
 ALLOW_ONLY_EXTERNAL_REGISTRATION = true
+; or, accounts by administrators only (see below):
+; DISABLE_REGISTRATION = true
 
 [oauth2_client]
 ENABLE_AUTO_REGISTRATION = true
@@ -181,9 +185,19 @@ as usual (see the strict option below). Any other active OAuth2 source still
 shows its own button, so do not add one.
 
 At startup BananaGit warns in the log, and on the admin dashboard, when there
-is no active BananaWiki Hosting source, when registration settings keep new
-people out (`DISABLE_REGISTRATION`, `ALLOW_ONLY_INTERNAL_REGISTRATION`), or
-when the local sign-up page is still open.
+is no active BananaWiki Hosting source, or when the local sign-up page is
+still open.
+
+#### Accounts by administrators only
+
+With `[service] DISABLE_REGISTRATION = true`, a portal account alone does not
+get anyone in. An administrator creates the BananaGit account (**Site
+Administration → Identity & Access → User Accounts → Create User Account**)
+and gives its user name and password to the person. They choose "Sign in
+with BananaWiki", sign in to the portal, and on the page that follows connect
+that account with the user name and password (and its two-factor code). From
+then on the portal sign-in takes them straight in. The "Create a new account"
+tab only says that registration is disabled.
 
 To go back: set `SIGNIN_MODE = both` (or remove it) and restart; the
 `[service]` and `[openid]` settings apply again.
@@ -199,7 +213,6 @@ by one:
 ENABLE_PASSWORD_SIGNIN_FORM = false
 ; new accounts only through an external source (no local sign-up page)
 ALLOW_ONLY_EXTERNAL_REGISTRATION = true
-; keep DISABLE_REGISTRATION = false, or nobody new can get in
 ; optional, strict: no passwords over HTTP Basic either (tokens still work)
 ENABLE_BASIC_AUTHENTICATION = false
 
@@ -241,7 +254,10 @@ Notes:
 ### Do not lock yourself out
 
 With `SIGNIN_MODE = hosting` or `ENABLE_PASSWORD_SIGNIN_FORM = false`,
-password sign-in is refused for everyone, administrators included. Before
+password sign-in is refused for everyone, administrators included. With
+`SIGNIN_MODE = hosting` an administrator who is not linked yet still gets in
+by signing in to the portal and connecting the account with its password; with
+`ENABLE_PASSWORD_SIGNIN_FORM = false` alone there is no such form. Before
 switching:
 
 1. Sign in as an administrator with your password and link your account to

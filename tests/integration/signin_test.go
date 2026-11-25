@@ -130,6 +130,22 @@ func TestEnablePasswordSignInFormAndEnablePasskeyAuth(t *testing.T) {
 		AssertHTMLElement(t, doc, "form[action='/user/link_account_signin']", false)
 	})
 
+	t.Run("BananaGit SIGNIN_MODE=hosting keeps the form that connects an account", func(t *testing.T) {
+		defer tests.PrintCurrentTest(t)()
+		defer test.MockVariableValue(&setting.Service.EnablePasswordSignInForm, false)()
+		defer test.MockVariableValue(&setting.BananaGit.SignInMode, setting.SignInModeHosting)()
+
+		req := NewRequest(t, "POST", "/user/login")
+		MakeRequest(t, req, http.StatusForbidden)
+
+		req = NewRequest(t, "GET", "/user/link_account")
+		defer web.RouteMockReset()
+		web.RouteMock(web.MockAfterMiddlewares, mockLinkAccount)
+		resp := MakeRequest(t, req, http.StatusOK)
+		doc := NewHTMLParser(t, resp.Body)
+		AssertHTMLElement(t, doc, "form[action='/user/link_account_signin']", true)
+	})
+
 	t.Run("EnablePasswordSignInForm=true", func(t *testing.T) {
 		defer tests.PrintCurrentTest(t)()
 		defer test.MockVariableValue(&setting.Service.EnablePasswordSignInForm, true)()

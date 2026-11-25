@@ -1,15 +1,16 @@
 {{template "base/head" .}}
 <div role="main" aria-label="{{.Title}}" class="page-content user link-account">
-	{{$hosting := ctx.RootData.BananaGitSignIn.PendingHosting}}{{if $hosting}}{{template "bananagit/link_account_intro" (dict "Hosting" $hosting)}}{{end}}{{/* BananaGit */}}
+	{{$hosting := ctx.RootData.BananaGitSignIn.PendingHosting}}{{if $hosting}}{{template "bananagit/link_account_intro" (dict "Hosting" $hosting "Closed" .DisableRegistration)}}{{end}}{{/* BananaGit */}}
+	{{$signin := or .user_exists (and $hosting .DisableRegistration)}}{{/* BananaGit: nothing to create, so the existing account comes first */}}
 	<overflow-menu class="ui secondary pointing tabular top attached borderless menu secondary-nav">
 		<div class="overflow-menu-items tw-justify-center" data-global-init="initTabSwitcher">
 			<!-- TODO handle .ShowRegistrationButton once other login bugs are fixed -->
 			{{if not .AllowOnlyInternalRegistration}}
-				<a class="item {{if not .user_exists}}active{{end}}" data-tab="auth-link-signup-tab">
+				<a class="item {{if not $signin}}active{{end}}" data-tab="auth-link-signup-tab">
 					{{if $hosting}}{{ctx.Locale.Tr "bananagit.link.signup_tab"}}{{else}}{{ctx.Locale.Tr "auth.oauth_signup_tab"}}{{end}}
 				</a>
 			{{end}}
-			<a class="item {{if .user_exists}}active{{end}}" data-tab="auth-link-signin-tab">
+			<a class="item {{if $signin}}active{{end}}" data-tab="auth-link-signin-tab">
 				{{if $hosting}}{{ctx.Locale.Tr "bananagit.link.signin_tab"}}{{else}}{{ctx.Locale.Tr "auth.oauth_signin_tab"}}{{end}}
 			</a>
 		</div>
@@ -17,16 +18,16 @@
 	<div class="ui middle very relaxed page grid">
 		<div class="column tw-my-5">
 			{{/* these styles are quite tricky but it needs to be the same as the signin page */}}
-			<div class="ui tab {{if not .user_exists}}active{{end}}" data-tab="auth-link-signup-tab">
+			<div class="ui tab {{if not $signin}}active{{end}}" data-tab="auth-link-signup-tab">
 				<div class="tw-flex tw-flex-col tw-gap-4 tw-max-w-2xl tw-m-auto">
 				{{if .AutoRegistrationFailedPrompt}}<div class="ui message">{{.AutoRegistrationFailedPrompt}}</div>{{end}}
-				{{if $hosting}}<p>{{ctx.Locale.Tr "bananagit.link.signup_hint"}}</p>{{end}}
+				{{if $hosting}}<p>{{if .DisableRegistration}}{{ctx.Locale.Tr "bananagit.link.signup_closed_hint"}}{{else}}{{ctx.Locale.Tr "bananagit.link.signup_hint"}}{{end}}</p>{{end}}
 				{{template "user/auth/signup_inner" .}}
 				</div>
 			</div>
-			<div class="ui tab {{if .user_exists}}active{{end}}" data-tab="auth-link-signin-tab">
+			<div class="ui tab {{if $signin}}active{{end}}" data-tab="auth-link-signin-tab">
 				<div class="tw-flex tw-flex-col tw-gap-4 tw-max-w-2xl tw-m-auto">
-				{{if $hosting}}<p>{{if .EnablePasswordSignInForm}}{{ctx.Locale.Tr "bananagit.link.signin_hint"}}{{else}}{{ctx.Locale.Tr "bananagit.link.signin_hint_admin"}}{{end}}</p>{{end}}
+				{{if $hosting}}<p>{{ctx.Locale.Tr "bananagit.link.signin_hint"}}</p>{{end}}
 				{{template "user/auth/signin_inner" .}}
 				</div>
 			</div>

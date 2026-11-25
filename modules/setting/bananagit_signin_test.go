@@ -65,11 +65,10 @@ ENABLE_OPENID_SIGNUP = true
 		assert.Len(t, StartupProblems, 1)
 	})
 
-	t.Run("hosting warns when new people cannot get an account", func(t *testing.T) {
+	t.Run("hosting with registration off is a choice, not a problem", func(t *testing.T) {
 		StartupProblems = nil
 		loadBananaGitTestConfig(t, "[service]\nDISABLE_REGISTRATION = true\n[bananagit]\nSIGNIN_MODE = hosting\n")
-		require.Len(t, StartupProblems, 1)
-		assert.Contains(t, StartupProblems[0], "DISABLE_REGISTRATION")
+		assert.Empty(t, StartupProblems)
 	})
 
 	t.Run("hosting warns when local sign-up stays open", func(t *testing.T) {

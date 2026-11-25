@@ -41,6 +41,10 @@ func prepareLinkAccountPageData(ctx *context.Context) {
 	prepareCommonAuthPageData(ctx, CommonAuthOptions{
 		EnableCaptcha: setting.Service.EnableCaptcha && setting.Service.RequireExternalRegistrationCaptcha,
 	})
+	// BananaGit: SIGNIN_MODE = hosting hides the password form on the sign-in page only; connecting an existing account still takes its password
+	if setting.BananaGit.SignInMode == setting.SignInModeHosting {
+		ctx.Data["EnablePasswordSignInForm"] = true
+	}
 }
 
 // LinkAccount shows the page where the user can decide to login or create a new account

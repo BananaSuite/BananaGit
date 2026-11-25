@@ -61,9 +61,8 @@ func loadBananaGitFrom(rootCfg ConfigProvider) {
 	if !InstallLock {
 		return
 	}
-	if Service.DisableRegistration || Service.AllowOnlyInternalRegistration {
-		LogStartupProblem(1, log.WARN, "[bananagit] SIGNIN_MODE = hosting, but [service] DISABLE_REGISTRATION or ALLOW_ONLY_INTERNAL_REGISTRATION keeps people without a BananaGit account out: only accounts already linked to BananaWiki Hosting can sign in")
-	} else if !Service.AllowOnlyExternalRegistration {
+	// DISABLE_REGISTRATION = true is a choice (accounts by administrators only): their owners connect them at the first sign-in
+	if !Service.DisableRegistration && !Service.AllowOnlyExternalRegistration {
 		LogStartupProblem(1, log.WARN, "[bananagit] SIGNIN_MODE = hosting, but the local sign-up page still creates password accounts: set [service] ALLOW_ONLY_EXTERNAL_REGISTRATION = true")
 	}
 }

@@ -2,6 +2,6 @@
 <div class="ui container tw-max-w-2xl tw-mt-4">
 	<div class="ui info message">
 		<div class="header">{{ctx.Locale.Tr "bananagit.link.intro_title" .Hosting.Username}}</div>
-		<p>{{ctx.Locale.Tr "bananagit.link.intro"}}</p>
+		<p>{{if .Closed}}{{ctx.Locale.Tr "bananagit.link.intro_closed"}}{{else}}{{ctx.Locale.Tr "bananagit.link.intro"}}{{end}}</p>
 	</div>
 </div>
