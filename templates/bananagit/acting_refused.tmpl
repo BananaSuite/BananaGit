@@ -1,0 +1,11 @@
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content">
+	<div class="ui container">
+		<div class="ui negative message tw-mt-4">
+			<div class="header">{{ctx.Locale.Tr "bananagit.acting.refused_title"}}</div>
+			<p>{{.BananaGitRefusal}}</p>
+		</div>
+		<a class="ui button" href="{{AppSubUrl}}/">{{ctx.Locale.Tr "bananagit.acting.back_home"}}</a>
+	</div>
+</div>
+{{template "base/footer" .}}

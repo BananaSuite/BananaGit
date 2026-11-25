@@ -28,6 +28,7 @@ import (
 	"gitea.dev/modules/setting"
 	source_service "gitea.dev/services/auth/source"
 	"gitea.dev/services/auth/source/oauth2"
+	bananagit_service "gitea.dev/services/bananagit"
 	"gitea.dev/services/context"
 	"gitea.dev/services/externalaccount"
 	user_service "gitea.dev/services/user"
@@ -130,6 +131,9 @@ func SignInOAuthCallback(ctx *context.Context) {
 	}
 
 	if u == nil {
+		if bananagit_service.RefuseLinkWhileActing(ctx, authSource, gothUser) { // BananaGit: never link or create while acting
+			return
+		}
 		if ctx.Doer != nil {
 			// attach user to the current signed-in user
 			err = externalaccount.LinkAccountToUser(ctx, authSource.ID, ctx.Doer, gothUser)
@@ -354,13 +358,17 @@ func oauth2UpdateAvatarIfNeed(ctx *context.Context, avatarURL string, u *user_mo
 }
 
 func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_model.User, gothUser goth.User) {
+	acting := bananagit_service.CheckActingSignIn(ctx, authSource, u, gothUser) // BananaGit: hosting administrator acting as u
+	if ctx.Written() {
+		return
+	}
 	oauth2SignInSync(ctx, authSource.ID, u, gothUser)
 	if ctx.Written() {
 		return
 	}
 
 	needs2FA := false
-	if !authSource.TwoFactorShouldSkip() {
+	if !authSource.TwoFactorShouldSkip() && !bananagit_service.SkipsLocal2FA(authSource) { // BananaGit: HOSTING_SKIPS_LOCAL_2FA
 		var err error
 		if needs2FA, err = auth.HasTwoFactorOrWebAuthn(ctx, u.ID); err != nil {
 			ctx.ServerError("UserSignIn", err)
@@ -427,12 +435,12 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 			return
 		}
 
-		if err := regenerateSession(ctx, nil, map[string]any{
+		if err := regenerateSession(ctx, bananagit_service.ActingSessionKeys, bananagit_service.WithActing(acting, map[string]any{
 			session.KeyUID:                  u.ID,
 			session.KeyUname:                u.Name,
 			session.KeyUserHasTwoFactorAuth: userHasTwoFactorAuth,
 			session.KeySignInMethod:         session.SignInMethodOAuth2,
-		}); err != nil {
+		})); err != nil {
 			ctx.ServerError("updateSession", err)
 			return
 		}

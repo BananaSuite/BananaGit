@@ -13,6 +13,8 @@ the Konami code with a short banana shower. Turned off, pages carry no egg scrip
 answer 404.
 
 Badges are Gitea's own (*Site Administration → Badges*); an egg can award one, shown on the finder's profile.
+It is awarded on the first find only, so a badge an administrator removes stays removed (and a badge added to
+an egg later does not reach earlier finders).
 Finds are cosmetic and easy to forge, so do not give badges any meaning beyond fun.
 
 | | |

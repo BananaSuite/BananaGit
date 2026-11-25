@@ -1,0 +1,205 @@
+{{template "admin/layout_head" (dict "pageClass" "admin bananagit-account-links")}}
+	<div class="admin-setting-content">
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.title"}}</h4>
+		<div class="ui attached segment">
+			<p>{{ctx.Locale.Tr "bananagit.links.intro"}}</p>
+			{{if not .Source}}
+				<div class="ui warning message">{{ctx.Locale.Tr "bananagit.links.no_source" (printf "%s/-/admin/auths" AppSubUrl)}}</div>
+			{{else}}
+				<p class="tw-text-text-light">{{ctx.Locale.Tr "bananagit.links.source" .Source.Name}}{{if .PortalURL}} · {{.PortalURL}}{{end}}</p>
+			{{end}}
+		</div>
+
+		{{if .Source}}
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.hosting_only"}}</h4>
+		<div class="ui attached segment">
+			{{if .HostingOnly}}
+				<p>{{ctx.Locale.Tr "bananagit.links.hosting_only_on"}}</p>
+			{{end}}
+			<p>{{ctx.Locale.Tr "bananagit.links.unlinked_count" .UnlinkedUsers .UnlinkedAdmins}}</p>
+			{{if .UnlinkedAdmins}}<div class="ui warning message">{{ctx.Locale.Tr "bananagit.links.unlinked_admins_warning"}}</div>{{end}}
+			{{if not .HostingOnly}}
+				<p>{{ctx.Locale.Tr "bananagit.links.hosting_only_step"}}</p>
+				<pre class="tw-p-2">[bananagit]
+SIGNIN_MODE = hosting</pre>
+				<p class="tw-text-text-light">{{ctx.Locale.Tr "bananagit.links.hosting_only_note"}}</p>
+			{{end}}
+		</div>
+
+		{{if not .LookupAvailable}}
+			<div class="ui info message">{{ctx.Locale.Tr "bananagit.links.no_lookup"}}</div>
+		{{end}}
+		{{if .LinkError}}
+			<div class="ui negative message">{{.LinkError}}</div>
+		{{end}}
+
+		{{if .Preview}}
+		<h4 class="ui top attached header" id="preview">{{ctx.Locale.Tr "bananagit.links.preview"}}</h4>
+		<div class="ui attached segment">
+			{{if .PreviewStale}}<div class="ui warning message">{{ctx.Locale.Tr "bananagit.links.preview_stale"}}</div>{{end}}
+			<p>
+				{{range $state := (StringUtils.Split "will_link already_linked conflict not_found skipped" " ")}}
+					<span class="ui basic label">{{ctx.Locale.Tr (printf "bananagit.links.state.%s" $state)}}: {{index $.Preview.Counts $state}}</span>
+				{{end}}
+			</p>
+			<table class="ui very basic table unstackable">
+				<thead>
+					<tr>
+						<th>{{ctx.Locale.Tr "bananagit.links.local_user"}}</th>
+						<th>{{ctx.Locale.Tr "bananagit.links.hosting_account"}}</th>
+						<th>{{ctx.Locale.Tr "bananagit.links.state"}}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{{range .Preview.Rows}}
+						<tr>
+							<td>{{if .Line}}<span class="tw-text-text-light">#{{.Line}}</span> {{end}}{{.LocalName}}</td>
+							<td>{{if .Hosting}}{{.Hosting}}{{end}}{{if .Sub}} <code>{{.Sub}}</code>{{end}}</td>
+							<td>
+								<span class="ui small {{if eq .State "will_link"}}green{{else if eq .State "conflict"}}red{{else if eq .State "already_linked"}}blue{{end}} label">{{ctx.Locale.Tr (printf "bananagit.links.state.%s" .State)}}</span>
+								{{if or (eq .Reason "hosting_linked_other") (eq .Reason "local_linked_other")}}
+									<span class="tw-text-text-light">{{ctx.Locale.Tr (printf "bananagit.links.reason.%s" .Reason) .Other}}</span>
+								{{else if .Reason}}
+									<span class="tw-text-text-light">{{ctx.Locale.Tr (printf "bananagit.links.reason.%s" .Reason)}}</span>
+								{{end}}
+							</td>
+						</tr>
+					{{else}}
+						<tr><td colspan="3">{{ctx.Locale.Tr "no_results_found"}}</td></tr>
+					{{end}}
+				</tbody>
+			</table>
+			<form class="ui form" method="post" action="{{.Link}}/apply">
+				<input type="hidden" name="mode" value="{{.LinkRequest.Mode}}">
+				{{if .LinkRequest.IncludeAdmins}}<input type="hidden" name="include_admins" value="on">{{end}}
+				<input type="hidden" name="list_kind" value="{{.LinkRequest.ListKind}}">
+				<input type="hidden" name="list" value="{{.LinkRequest.List}}">
+				<input type="hidden" name="token" value="{{.Preview.Token}}">
+				<button class="ui primary button" {{if not (index .Preview.Counts "will_link")}}disabled{{end}}>{{ctx.Locale.Tr "bananagit.links.apply" (index .Preview.Counts "will_link")}}</button>
+				<a class="ui button" href="{{.Link}}">{{ctx.Locale.Tr "cancel"}}</a>
+			</form>
+		</div>
+		{{end}}
+
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.one"}}</h4>
+		<div class="ui attached segment">
+			<form class="ui form" method="post" action="{{.Link}}/preview">
+				<input type="hidden" name="mode" value="single">
+				<div class="three fields">
+					<div class="required field">
+						<label for="link-local">{{ctx.Locale.Tr "bananagit.links.local_user"}}</label>
+						<input id="link-local" name="local" required maxlength="255">
+					</div>
+					<div class="required field">
+						<label for="link-target">{{ctx.Locale.Tr "bananagit.links.hosting_account"}}</label>
+						<input id="link-target" name="target" required maxlength="255">
+					</div>
+					<div class="field">
+						<label for="link-kind">{{ctx.Locale.Tr "bananagit.links.target_kind"}}</label>
+						<select id="link-kind" name="list_kind" class="ui dropdown">
+							{{if .LookupAvailable}}<option value="username">{{ctx.Locale.Tr "bananagit.links.kind.username"}}</option>{{end}}
+							<option value="sub">{{ctx.Locale.Tr "bananagit.links.kind.sub"}}</option>
+						</select>
+					</div>
+				</div>
+				<div class="inline field">
+					<div class="ui checkbox"><input type="checkbox" name="include_admins" id="link-one-admins"><label for="link-one-admins">{{ctx.Locale.Tr "bananagit.links.include_admins"}}</label></div>
+				</div>
+				<button class="ui button">{{ctx.Locale.Tr "bananagit.links.preview_button"}}</button>
+			</form>
+		</div>
+
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.bulk"}}</h4>
+		<div class="ui attached segment">
+			<form class="ui form" method="post" action="{{.Link}}/preview">
+				<div class="grouped fields">
+					{{range $mode := (StringUtils.Split "username email both" " ")}}
+					<div class="field">
+						<div class="ui radio checkbox">
+							<input type="radio" name="mode" value="{{$mode}}" id="link-mode-{{$mode}}" {{if eq $mode "username"}}checked{{end}} {{if not $.LookupAvailable}}disabled{{end}}>
+							<label for="link-mode-{{$mode}}">{{ctx.Locale.Tr (printf "bananagit.links.mode.%s" $mode)}}</label>
+						</div>
+					</div>
+					{{end}}
+				</div>
+				<div class="inline field">
+					<div class="ui checkbox"><input type="checkbox" name="include_admins" id="link-bulk-admins"><label for="link-bulk-admins">{{ctx.Locale.Tr "bananagit.links.include_admins"}}</label></div>
+				</div>
+				<button class="ui button" {{if not .LookupAvailable}}disabled{{end}}>{{ctx.Locale.Tr "bananagit.links.preview_button"}}</button>
+			</form>
+		</div>
+
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.list"}}</h4>
+		<div class="ui attached segment">
+			<form class="ui form" method="post" action="{{.Link}}/preview">
+				<input type="hidden" name="mode" value="list">
+				<p>{{ctx.Locale.Tr "bananagit.links.list_help" .MaxListRows}}</p>
+				<div class="field">
+					<textarea name="list" rows="6" required placeholder="local_username,hosting_username">{{if and .LinkRequest (eq .LinkRequest.Mode "list")}}{{.LinkRequest.List}}{{end}}</textarea>
+				</div>
+				<div class="inline fields">
+					<label>{{ctx.Locale.Tr "bananagit.links.target_kind"}}</label>
+					{{if .LookupAvailable}}
+					<div class="field"><div class="ui radio checkbox"><input type="radio" name="list_kind" value="username" id="link-list-username" checked><label for="link-list-username">{{ctx.Locale.Tr "bananagit.links.kind.username"}}</label></div></div>
+					{{end}}
+					<div class="field"><div class="ui radio checkbox"><input type="radio" name="list_kind" value="sub" id="link-list-sub" {{if not .LookupAvailable}}checked{{end}}><label for="link-list-sub">{{ctx.Locale.Tr "bananagit.links.kind.sub"}}</label></div></div>
+				</div>
+				<div class="inline field">
+					<div class="ui checkbox"><input type="checkbox" name="include_admins" id="link-list-admins"><label for="link-list-admins">{{ctx.Locale.Tr "bananagit.links.include_admins"}}</label></div>
+				</div>
+				<button class="ui button">{{ctx.Locale.Tr "bananagit.links.preview_button"}}</button>
+			</form>
+		</div>
+
+		<h4 class="ui top attached header">{{ctx.Locale.Tr "bananagit.links.users"}} ({{ctx.Locale.Tr "admin.total" .Total}})</h4>
+		<div class="ui attached segment">
+			<form class="ui form ignore-dirty flex-text-block" method="get" action="{{.Link}}">
+				<div class="tw-flex-1">
+					{{template "shared/search/combo" dict "Value" .Keyword "Placeholder" (ctx.Locale.Tr "search.user_kind")}}
+				</div>
+				<div class="ui checkbox"><input type="checkbox" name="unlinked" value="1" id="link-unlinked" {{if .UnlinkedOnly}}checked{{end}}><label for="link-unlinked">{{ctx.Locale.Tr "bananagit.links.unlinked_only"}}</label></div>
+			</form>
+		</div>
+		<div class="ui attached table segment">
+			<table class="ui very basic table unstackable">
+				<thead>
+					<tr>
+						<th>{{ctx.Locale.Tr "admin.users.name"}}</th>
+						<th>{{ctx.Locale.Tr "email"}}</th>
+						<th>{{ctx.Locale.Tr "bananagit.links.hosting_account"}}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{{range .Users}}
+						<tr>
+							<td>
+								<a href="{{.User.HomeLink}}">{{.User.Name}}</a>
+								{{if .User.IsAdmin}}<span class="ui mini label">{{ctx.Locale.Tr "admin.users.admin"}}</span>{{end}}
+								{{if or (not .User.IsActive) .User.ProhibitLogin}}<span class="ui mini label">{{ctx.Locale.Tr "bananagit.links.disabled"}}</span>{{end}}
+							</td>
+							<td class="gt-ellipsis tw-max-w-48">{{.User.Email}}</td>
+							<td>
+								{{if .Sub}}
+									{{if .Hosting}}{{.Hosting}} {{end}}<code>{{.Sub}}</code>
+									{{if .SignedUp}}<span class="tw-text-text-light">{{ctx.Locale.Tr "bananagit.links.signed_up"}}</span>{{end}}
+								{{else}}
+									<span class="tw-text-text-light">{{ctx.Locale.Tr "bananagit.links.not_linked"}}</span>
+								{{end}}
+							</td>
+							<td class="tw-text-right">
+								{{if and .Sub (not .SignedUp)}}
+									<button class="ui red tiny button link-action" data-url="{{$.Link}}/unlink?uid={{.User.ID}}" data-modal-confirm="{{ctx.Locale.Tr "bananagit.links.unlink_confirm" .User.Name}}">{{ctx.Locale.Tr "bananagit.links.unlink"}}</button>
+								{{end}}
+							</td>
+						</tr>
+					{{else}}
+						<tr class="no-results-row"><td class="tw-text-center" colspan="4">{{ctx.Locale.Tr "no_results_found"}}</td></tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+		{{template "base/paginate" .}}
+		{{end}}
+	</div>
+{{template "admin/layout_footer" .}}

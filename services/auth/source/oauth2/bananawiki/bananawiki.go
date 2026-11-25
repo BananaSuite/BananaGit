@@ -181,6 +181,9 @@ func userFromReader(body []byte, user *goth.User) error {
 	if verified, _ := raw["email_verified"].(bool); verified {
 		user.Email, _ = raw["email"].(string)
 	}
+	if _, err := ActingFromRawData(raw); err != nil {
+		return err // an incomplete "act" must never pass for an ordinary sign-in
+	}
 	return nil
 }
 

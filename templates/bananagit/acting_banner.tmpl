@@ -1,0 +1,8 @@
+{{/* BananaGit: shown on every page while a hosting administrator is signed in as this account (SIGNIN-SPEC A2) */}}
+{{with ctx.RootData.BananaGitActing}}
+<div class="ui warning message tw-m-0 tw-rounded-none tw-text-center" role="alert" id="bananagit-acting-banner">
+	<strong>{{ctx.Locale.Tr "bananagit.acting.banner" .AdminName .UserName}}</strong>
+	· {{ctx.Locale.Tr "bananagit.acting.until" (DateUtils.FullTime .Until)}}
+	· <a href="{{AppSubUrl}}/user/logout">{{ctx.Locale.Tr "sign_out"}}</a>
+</div>
+{{end}}

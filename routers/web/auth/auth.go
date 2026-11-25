@@ -221,7 +221,8 @@ func performAutoLogin(ctx *context.Context) bool {
 
 func performAutoLoginOAuth2(ctx *context.Context, data *preparedSignInData) bool {
 	// If only 1 OAuth provider is present and other login methods are disabled, redirect to the OAuth provider.
-	onlySingleOAuth2 := len(data.oauth2Providers) == 1 &&
+	onlySingleOAuth2 := setting.Service.EnableAutoOAuth2Redirect && // BananaGit: [service] ENABLE_AUTO_OAUTH2_REDIRECT
+		len(data.oauth2Providers) == 1 &&
 		!setting.Service.EnablePasswordSignInForm &&
 		!setting.Service.EnableOpenIDSignIn &&
 		!setting.Service.EnablePasskeyAuth &&

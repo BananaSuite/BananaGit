@@ -74,9 +74,124 @@ Manage Linked Accounts → Link Account**. Someone signing in with an unknown
 portal account gets Gitea's "link account" page: create a new account, or
 connect an existing one by entering its password (and its two-factor code).
 
+An administrator can also link accounts: **Site Administration → Identity &
+Access → Account links** (next section).
+
+### Account links
+
+The page lists the users, which of them are linked to a BananaWiki Hosting
+account, and how many active users (and administrators) are not linked yet,
+with the exact `SIGNIN_MODE = hosting` step. From there an administrator can:
+
+* link one user: a BananaGit user and a hosting username (looked up at the
+  portal) or a hosting account id (`sub`, typed in);
+* link many users at once: same username (case does not matter), same
+  verified email, or both;
+* link from a pasted list, one `local_username,hosting_username` (or
+  `local_username,hosting_sub`) per line, at most 500 lines;
+* unlink a user (not an account that was created by signing in with
+  BananaWiki: that link is its only way in).
+
+Every run shows a preview first: *will link*, *already linked*, *conflict*
+(hosting account linked to someone else, user linked to another hosting
+account, several candidates, suspended or pending hosting account),
+*not found* and *skipped* (administrators unless "Include administrators" is
+ticked, disabled accounts). **Apply** links only the *will link* rows of that
+preview: if anything changed in between, nothing is linked and the new
+preview is shown. Links are the same rows Gitea writes when a user links an
+account (`external_login_user`). Every link and unlink goes to the server log
+and to **System Notices** (who, which accounts, which rule).
+
+Looking accounts up needs a portal API token of a hosting administrator with
+the `accounts:lookup` scope:
+
+```ini
+[bananagit]
+PORTAL_LOOKUP_TOKEN = ...
+; or, read from a file:
+; PORTAL_LOOKUP_TOKEN_URI = file:/etc/bananagit/portal-lookup-token
+```
+
+The portal's address comes from the token URL of the BananaWiki Hosting
+source. Without a token the page only accepts account ids (`sub`) typed in.
+
+### Two-step codes
+
+Sign-ins through the BananaWiki Hosting source do not ask for BananaGit's own
+two-step code: the portal asks for its own. Password sign-ins still ask.
+`[bananagit] HOSTING_SKIPS_LOCAL_2FA = false` keeps asking after hosting
+sign-ins too. Linking an existing account on the link-account page always asks
+for its password and two-step code.
+
+### Hosting administrators acting as an account
+
+When the portal lets an administrator act as an account (portal setting
+`admin_app_signin`), its sign-in tells BananaGit who is acting and until when.
+BananaGit then:
+
+* shows "*admin* is signed in as *user*" on every page;
+* ends the session at the time the portal gave (at most 12 hours);
+* refuses changing the password, two-step, emails, linked accounts, deleting
+  the account, access tokens and OAuth2 applications, SSH, GPG and deploy
+  keys, and authorising OAuth2 applications;
+* never links or creates an account: an unknown hosting account is refused;
+* refuses acting as a BananaGit administrator, and as an account that asks for
+  BananaGit's own two-step code;
+* records every such sign-in in the server log and in **System Notices**.
+
+`[bananagit] ALLOW_ACTING_ADMINS = false` refuses these sign-ins altogether
+(sessions already open end at their next request).
+
 ## 3. Optional: BananaWiki Hosting as the only way in
 
-All with existing Gitea settings in `app.ini`:
+### SIGNIN_MODE = hosting
+
+One BananaGit setting does it (read before you switch: [Do not lock yourself
+out](#do-not-lock-yourself-out)):
+
+```ini
+[bananagit]
+; default: both
+SIGNIN_MODE = hosting
+
+[service]
+; no local sign-up page; keep DISABLE_REGISTRATION = false, or nobody new can get in
+ALLOW_ONLY_EXTERNAL_REGISTRATION = true
+
+[oauth2_client]
+ENABLE_AUTO_REGISTRATION = true
+USERNAME = nickname
+ACCOUNT_LINKING = login
+```
+
+Restart BananaGit. With `hosting`, whatever `app.ini` says, BananaGit turns
+off:
+
+* the password form (`[service] ENABLE_PASSWORD_SIGNIN_FORM`), for
+  administrators too;
+* passkeys (`ENABLE_PASSKEY_AUTHENTICATION`);
+* OpenID sign-in and sign-up (`[openid] ENABLE_OPENID_SIGNIN`,
+  `ENABLE_OPENID_SIGNUP`);
+* the automatic redirect (`ENABLE_AUTO_OAUTH2_REDIRECT`): the sign-in page
+  and the home page show a "Sign in with BananaWiki" button.
+
+It does not touch Git: SSH keys and access tokens over HTTPS work as before.
+Git with a password over HTTPS follows `[service] ENABLE_BASIC_AUTHENTICATION`
+as usual (see the strict option below). Any other active OAuth2 source still
+shows its own button, so do not add one.
+
+At startup BananaGit warns in the log, and on the admin dashboard, when there
+is no active BananaWiki Hosting source, when registration settings keep new
+people out (`DISABLE_REGISTRATION`, `ALLOW_ONLY_INTERNAL_REGISTRATION`), or
+when the local sign-up page is still open.
+
+To go back: set `SIGNIN_MODE = both` (or remove it) and restart; the
+`[service]` and `[openid]` settings apply again.
+
+### Setting by setting
+
+The same with Gitea's own settings in `app.ini`, if you want to pick them one
+by one:
 
 ```ini
 [service]
@@ -125,17 +240,20 @@ Notes:
 
 ### Do not lock yourself out
 
-With `ENABLE_PASSWORD_SIGNIN_FORM = false`, password sign-in is refused for
-everyone, administrators included. Before switching:
+With `SIGNIN_MODE = hosting` or `ENABLE_PASSWORD_SIGNIN_FORM = false`,
+password sign-in is refused for everyone, administrators included. Before
+switching:
 
 1. Sign in as an administrator with your password and link your account to
    your portal account (Settings → Security → Manage Linked Accounts → Link
    Account → BananaWiki). Check that you can sign in through the portal.
 2. Keep a way back that does not depend on the portal (it can be down, the
    app secret can be rotated, the app can be suspended):
-   * a passkey on a local administrator account, if passkeys stay enabled; or
-   * shell access to the server: set `ENABLE_PASSWORD_SIGNIN_FORM = true`
-     again and restart BananaGit, and if needed reset a password with
+   * a passkey on a local administrator account, if passkeys stay enabled
+     (`SIGNIN_MODE = hosting` turns them off); or
+   * shell access to the server: set `[bananagit] SIGNIN_MODE = both` and
+     `ENABLE_PASSWORD_SIGNIN_FORM = true` again and restart BananaGit, and if
+     needed reset a password with
      `/opt/bananagit/current admin user change-password --config <app.ini>
      --username <admin> --password ...` (as the service's user);
      `admin user create --admin ...` creates a new administrator.

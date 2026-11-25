@@ -28,6 +28,7 @@
 		{{range $loginSource, $provider := .AccountLinks}}
 			<div class="item">
 				{{$providerData := index $.OAuth2Providers $loginSource.Name}}
+				{{$isHosting := $.BananaGitSignIn.IsHosting $loginSource}}{{/* BananaGit */}}
 				<div class="item-leading">
 					{{$providerData.IconHTML 20}}
 				</div>
@@ -35,13 +36,14 @@
 					<span class="item-title" data-tooltip-content="{{$provider}}">
 						{{$loginSource.Name}}
 					</span>
+					{{if $isHosting}}{{$as := $.BananaGitSignIn.LinkedAs $loginSource}}{{if $as}}<span class="flex-text-body">{{ctx.Locale.Tr "bananagit.link.connected_as" $as}}</span>{{end}}{{end}}
 					{{if $loginSource.IsActive}}
 					<span class="flex-text-body tw-text-primary">{{ctx.Locale.Tr "repo.settings.active"}}</span>
 					{{end}}
 				</div>
 				<div class="item-trailing">
-					<button class="ui red tiny button link-action" data-modal-confirm="#delete-account-link" data-url="{{AppSubUrl}}/user/settings/security/account_link?id={{$loginSource.ID}}">
-						{{ctx.Locale.Tr "settings.delete_key"}}
+					<button class="ui red tiny button link-action" data-modal-confirm="{{if $isHosting}}{{if $.BananaGitSignIn.HostingOnly}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm_hosting_only"}}{{else}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm"}}{{end}}{{else}}#delete-account-link{{end}}" data-url="{{AppSubUrl}}/user/settings/security/account_link?id={{$loginSource.ID}}">
+						{{if $isHosting}}{{ctx.Locale.Tr "bananagit.link.disconnect"}}{{else}}{{ctx.Locale.Tr "settings.delete_key"}}{{end}}
 					</button>
 				</div>
 			</div>

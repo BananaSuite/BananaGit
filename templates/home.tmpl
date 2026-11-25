@@ -1,51 +1,30 @@
+{{/* BananaGit: our own home page (bananagit/OURS); its data is BananaGitHome (routers/web/bananagit/home.go) */}}
 {{template "base/head" .}}
-<div role="main" aria-label="{{if .IsSigned}}{{ctx.Locale.Tr "dashboard"}}{{else}}{{ctx.Locale.Tr "home_title"}}{{end}}" class="page-content home">
-	<div class="tw-mb-8 tw-px-8">
-		<div class="center">
-			<img class="logo" width="220" height="220" src="{{AssetUrlPrefix}}/img/logo.svg" alt="{{ctx.Locale.Tr "logo"}}">
-			<div class="hero">
-				<h1 class="ui icon header title tw-text-balance">
-					{{AppName}}
-				</h1>
-				<h2 class="tw-text-balance">{{ctx.Locale.Tr "startpage.app_desc"}}</h2>
+{{$home := .BananaGitHome}}
+<div role="main" aria-label="{{ctx.Locale.Tr "home_title"}}" class="page-content bananagit-home">
+	<div class="ui container tw-flex tw-flex-col tw-items-center tw-text-center tw-gap-4 tw-py-8">
+		<img width="120" height="120" src="{{AssetUrlPrefix}}/img/logo.svg" alt="{{ctx.Locale.Tr "logo"}}">
+		<h1 class="ui header tw-m-0">{{AppName}}</h1>
+		{{with $home.Description}}<p class="tw-text-balance tw-m-0">{{.}}</p>{{end}}
+		{{if not .IsSigned}}
+			<div class="tw-flex tw-flex-wrap tw-justify-center tw-gap-2 tw-mt-4">
+				{{with $home.HostingProvider}}
+					<a class="ui primary button" rel="nofollow" href="{{AppSubUrl}}/user/oauth2/{{.DisplayName | PathEscape}}">{{ctx.Locale.Tr "sign_in_with_provider" .DisplayName}}</a>
+				{{end}}
+				{{if $home.ShowSignIn}}
+					<a class="ui button" rel="nofollow" href="{{AppSubUrl}}/user/login">{{ctx.Locale.Tr "sign_in"}}</a>
+				{{end}}
+				{{if $home.ShowExplore}}
+					<a class="ui basic button" href="{{AppSubUrl}}/explore/repos">{{ctx.Locale.Tr "bananagit.home.explore"}}</a>
+				{{end}}
 			</div>
-		</div>
-	</div>
-	<div class="ui stackable middle very relaxed page grid">
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-flame"}} {{ctx.Locale.Tr "startpage.install"}}
-			</h1>
-			<p class="large tw-text-balance">
-				{{ctx.Locale.Tr "startpage.install_desc" "https://github.com/BananaSuite/BananaGit#install" "https://github.com/BananaSuite/BananaGit/blob/main/Dockerfile" "https://github.com/BananaSuite/BananaGit/releases"}}
-			</p>
-		</div>
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-device-desktop"}} {{ctx.Locale.Tr "startpage.platform"}}
-			</h1>
-			<p class="large tw-text-balance">
-				{{ctx.Locale.Tr "startpage.platform_desc" "https://go.dev/"}}
-			</p>
-		</div>
-	</div>
-	<div class="ui stackable middle very relaxed page grid">
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-rocket"}} {{ctx.Locale.Tr "startpage.lightweight"}}
-			</h1>
-			<p class="large tw-text-balance">
-				{{ctx.Locale.Tr "startpage.lightweight_desc"}}
-			</p>
-		</div>
-		<div class="eight wide center column">
-			<h1 class="hero ui icon header">
-				{{svg "octicon-code"}} {{ctx.Locale.Tr "startpage.license"}}
-			</h1>
-			<p class="large tw-text-balance">
-				{{ctx.Locale.Tr "startpage.license_desc" "https://gitea.dev" "gitea.dev" "https://github.com/go-gitea/gitea"}}
-			</p>
-		</div>
+		{{end}}
+		{{if or $home.WikiURL $home.ChatURL}}
+			<nav class="tw-flex tw-flex-wrap tw-justify-center tw-gap-4 tw-mt-4" aria-label="{{ctx.Locale.Tr "bananagit.home.suite"}}">
+				{{with $home.WikiURL}}<a href="{{.}}">{{ctx.Locale.Tr "bananagit.home.wiki"}}</a>{{end}}
+				{{with $home.ChatURL}}<a href="{{.}}">{{ctx.Locale.Tr "bananagit.home.chat"}}</a>{{end}}
+			</nav>
+		{{end}}
 	</div>
 </div>
 {{template "base/footer" .}}

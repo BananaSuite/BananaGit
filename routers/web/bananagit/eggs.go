@@ -1,7 +1,8 @@
 // Copyright 2026 The BananaGit Authors. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-// Package bananagit holds BananaGit's own web routes: the BananaSuite easter eggs (banana-eggs/v1).
+// Package bananagit holds BananaGit's own web routes and page data: the BananaSuite easter eggs (banana-eggs/v1),
+// the home page, the acting banner and guard, and the Account links admin page.
 package bananagit
 
 import (
@@ -21,6 +22,7 @@ import (
 	"gitea.dev/modules/timeutil"
 	"gitea.dev/modules/util"
 	"gitea.dev/modules/web"
+	bananagit_service "gitea.dev/services/bananagit"
 	"gitea.dev/services/context"
 )
 
@@ -39,17 +41,21 @@ var editorStrings = []string{"title", "add", "remove", "preview", "reset", "reco
 	"emoji_pick", "count", "speed_min", "speed_max", "delay", "unlock", "unlock_page", "unlock_toast", "unlock_none",
 	"unlock_delay", "record_find", "badge", "badge_none", "message", "limit"}
 
-// RegisterRoutes adds the easter egg routes and the page data every template can use (BananaGit's one hook in
-// routers/web/web.go). The middlewares are web.go's own.
+// RegisterRoutes adds BananaGit's routes, the page data every template can use and the acting guard (BananaGit's
+// one hook in routers/web/web.go). The middlewares are web.go's own.
 func RegisterRoutes(m *web.Router, optSignIn, reqSignIn, adminReq func(*context.Context)) {
-	m.AfterRouting(pageData)
+	checkSignInMode()
+	m.AfterRouting(pageData, bananagit_service.ActingGuard)
 	m.Get(eggsPagePath, optSignIn, EggsPage)
 	m.Post(eggsPagePath+"/{id}/found", reqSignIn, EggFound)
 	m.Post(eggsAdminPath, adminReq, AdminSave)
+	registerAccountLinks(m, adminReq)
 }
 
 func pageData(ctx *context.Context) {
 	ctx.Data["BananaGitEggs"] = &Eggs{ctx: ctx}
+	ctx.Data["BananaGitHome"] = &Home{ctx: ctx}
+	ctx.Data["BananaGitSignIn"] = &SignIn{ctx: ctx}
 }
 
 // Eggs is what templates use (base/head through bananagit/eggs_head, the admin settings section); everything
@@ -244,8 +250,8 @@ func EggFound(ctx *context.Context) {
 	if isNew {
 		log.Info("BananaGit easter egg %q found by %s", egg.ID, ctx.Doer.Name)
 	}
-	if egg.Badge != nil {
-		// every find (not only the first) so that a badge added to an egg later still reaches earlier finders
+	if egg.Badge != nil && isNew {
+		// only the first find: a badge an administrator took away stays away
 		err := user_model.AddUserBadge(ctx, ctx.Doer, &user_model.Badge{Slug: *egg.Badge})
 		switch {
 		case err == nil:
