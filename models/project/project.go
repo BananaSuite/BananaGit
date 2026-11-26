@@ -225,7 +225,7 @@ func (opts SearchOptions) ToConds() builder.Cond {
 	if opts.Type > 0 {
 		cond = cond.And(builder.Eq{"type": opts.Type})
 	}
-	if opts.OwnerID > 0 {
+	if opts.OwnerID != 0 {
 		cond = cond.And(builder.Eq{"owner_id": opts.OwnerID})
 	}
 
@@ -236,7 +236,7 @@ func (opts SearchOptions) ToConds() builder.Cond {
 }
 
 func (opts SearchOptions) ToOrders() string {
-	return opts.OrderBy.String()
+	return util.IfZero(opts.OrderBy.String(), "id")
 }
 
 func GetSearchOrderByBySortType(sortType string) db.SearchOrderBy {

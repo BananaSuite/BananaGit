@@ -108,11 +108,15 @@ func CheckActingSignIn(ctx *context.Context, source *auth_model.Source, u *user_
 	return acting
 }
 
-// ActingSessionKeys are deleted from the session on every OAuth2 sign-in before WithActing sets them again.
-var ActingSessionKeys = bananagit_module.SessionActKeys
+// ClearActing removes the acting state from a session. Every OAuth2 sign-in calls it before WithActing
+// sets the state again, so an ordinary sign-in never keeps an earlier acting state.
+func ClearActing(sess session.Store) {
+	for _, k := range bananagit_module.SessionActKeys {
+		_ = sess.Delete(k)
+	}
+}
 
-// WithActing adds the acting state to the session values of a sign-in. regenerateSession deletes
-// ActingSessionKeys first, so an ordinary OAuth2 sign-in never keeps an earlier acting state.
+// WithActing adds the acting state to the session values of a sign-in.
 func WithActing(acting *bananagit_module.Acting, values map[string]any) map[string]any {
 	if acting != nil {
 		for k, v := range acting.SessionValues() {
@@ -150,7 +154,7 @@ func RefuseLinkWhileActing(ctx *context.Context, source *auth_model.Source, goth
 		log.Warn("BananaGit: refused the sign-in of hosting administrator %s (%s) acting as unknown account %q from %s: no linking or new accounts while acting", act.AdminName, act.AdminSub, gothUser.UserID, ctx.RemoteAddr())
 		refuseSignIn(ctx, "unknown_account")
 	case IsActing(ctx):
-		log.Warn("BananaGit: refused linking %q to the acting session of %s from %s", gothUser.UserID, ctx.Session.Get(session.KeyUname), ctx.RemoteAddr())
+		log.Warn("BananaGit: refused linking %q to the acting session of %s from %s", gothUser.UserID, actingUserName(ctx), ctx.RemoteAddr())
 		refuseSignIn(ctx, "link")
 	default:
 		return false
@@ -178,9 +182,7 @@ func ActingGuard(ctx *context.Context) {
 	uid, _ := ctx.Session.Get(session.KeyUID).(int64)
 	if uid == 0 || uid != act.UID {
 		// signed out or signed in again in another way since: the acting state is stale
-		for _, k := range bananagit_module.SessionActKeys {
-			_ = ctx.Session.Delete(k)
-		}
+		ClearActing(ctx.Session)
 		return
 	}
 
@@ -208,9 +210,21 @@ func ActingGuard(ctx *context.Context) {
 	}
 }
 
+// actingUserName is the name of the account the session is acting as, for logs and messages.
+func actingUserName(ctx *context.Context) string {
+	uid, _ := ctx.Session.Get(session.KeyUID).(int64)
+	if ctx.Doer != nil && ctx.Doer.ID == uid {
+		return ctx.Doer.Name
+	}
+	if u, err := user_model.GetUserByID(ctx, uid); err == nil {
+		return u.Name
+	}
+	return ""
+}
+
 // endActing signs out, as the sign-out route does, and says why.
 func endActing(ctx *context.Context, act *bananagit_module.Acting, why string) {
-	name, _ := ctx.Session.Get(session.KeyUname).(string)
+	name := actingUserName(ctx)
 	log.Info("BananaGit: ended the session of hosting administrator %s (%s) acting as %s: %s", act.AdminName, act.AdminSub, name, why)
 	_ = ctx.Session.Flush()
 	_ = ctx.Session.Destroy(ctx.Resp, ctx.Req)

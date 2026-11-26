@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,15 +13,18 @@ import (
 	"testing"
 	"time"
 
+	auth_model "gitea.dev/models/auth"
 	"gitea.dev/models/db"
+	git_model "gitea.dev/models/git"
 	issues_model "gitea.dev/models/issues"
 	repo_model "gitea.dev/models/repo"
 	"gitea.dev/models/unittest"
 	user_model "gitea.dev/models/user"
 	"gitea.dev/modules/git"
-	"gitea.dev/modules/gitrepo"
+	api "gitea.dev/modules/structs"
 	"gitea.dev/modules/test"
 	issue_service "gitea.dev/services/issue"
+	pull_service "gitea.dev/services/pull"
 	repo_service "gitea.dev/services/repository"
 	files_service "gitea.dev/services/repository/files"
 	"gitea.dev/tests"
@@ -29,8 +33,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPullView_ReviewerMissed(t *testing.T) {
+func TestPullReview(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	t.Run("ReviewerMissed", testPullReviewReviewerMissed)
+	t.Run("LockedPR", testPullReviewLockedPR)
+}
+
+func testPullReviewReviewerMissed(t *testing.T) {
 	session := loginUser(t, "user1")
 
 	req := NewRequest(t, "GET", "/pulls")
@@ -49,9 +58,31 @@ func TestPullView_ReviewerMissed(t *testing.T) {
 	assert.True(t, test.IsNormalPageCompleted(resp.Body.String()))
 }
 
+func testPullReviewLockedPR(t *testing.T) {
+	const reviewsURL = "/api/v1/repos/user2/repo1/pulls/3/reviews"
+	token := getUserToken(t, "user4", auth_model.AccessTokenScopeWriteRepository)
+	resp := MakeRequest(t, NewRequestWithJSON(t, "POST", reviewsURL, &api.CreatePullReviewOptions{Event: api.ReviewStatePending, Body: "test"}).AddTokenAuth(token), http.StatusOK)
+	pendingReview := DecodeJSON(t, resp, &api.PullReview{})
+	require.NoError(t, issues_model.UpdateIssueCols(t.Context(), &issues_model.Issue{ID: 3, IsLocked: true}, "is_locked"))
+	commentCount := unittest.GetCount(t, &issues_model.Comment{IssueID: 3})
+	reviewOptions := &api.CreatePullReviewOptions{Event: api.ReviewStateComment, Body: "test"}
+
+	session := loginUser(t, "user4")
+	testSubmitReview(t, session, "user2", "repo1", "3", "", "comment", http.StatusBadRequest)
+	session.MakeRequest(t, NewRequestWithValues(t, "POST", "/user2/repo1/pulls/3/files/reviews/comments", map[string]string{"content": "test"}), http.StatusBadRequest)
+	MakeRequest(t, NewRequestWithJSON(t, "POST", reviewsURL, reviewOptions).AddTokenAuth(token), http.StatusForbidden)
+	MakeRequest(t, NewRequestWithJSON(t, "POST", fmt.Sprintf("%s/%d", reviewsURL, pendingReview.ID), &api.SubmitPullReviewOptions{Event: api.ReviewStateComment, Body: "test"}).AddTokenAuth(token), http.StatusForbidden)
+	MakeRequest(t, NewRequestWithJSON(t, "POST", "/api/v1/repos/user2/repo1/pulls/3/comments/7/replies", &api.CreatePullReviewCommentReplyOptions{Body: "test"}).AddTokenAuth(token), http.StatusForbidden)
+	unittest.AssertCount(t, &issues_model.Comment{IssueID: 3}, commentCount)
+
+	MakeRequest(t, NewRequestWithJSON(t, "POST", reviewsURL, reviewOptions).AddTokenAuth(getUserToken(t, "user2", auth_model.AccessTokenScopeWriteRepository)), http.StatusOK)
+}
+
 func TestPullView_CodeOwner(t *testing.T) {
 	onGiteaRun(t, func(t *testing.T, u *url.URL) {
 		user2 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
+		user5 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 5})
+		user8 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 8})
 
 		// Create the repo.
 		repo, err := repo_service.CreateRepositoryDirectly(t.Context(), user2, user2, repo_service.CreateRepoOptions{
@@ -61,6 +92,17 @@ func TestPullView_CodeOwner(t *testing.T) {
 			ObjectFormatName: git.Sha1ObjectFormat.Name(),
 			DefaultBranch:    "master",
 		}, true)
+		assert.NoError(t, err)
+
+		// create code owner branch protection
+		protectBranch := git_model.ProtectedBranch{
+			BlockOnCodeownerReviews: true,
+			RepoID:                  repo.ID,
+			RuleName:                "master",
+			CanPush:                 true,
+		}
+
+		err = pull_service.CreateOrUpdateProtectedBranch(t.Context(), repo, &protectBranch, git_model.WhitelistOptions{})
 		assert.NoError(t, err)
 
 		// add CODEOWNERS to default branch
@@ -98,16 +140,8 @@ func TestPullView_CodeOwner(t *testing.T) {
 			unittest.AssertExistsAndLoadBean(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest, ReviewerID: 5})
 			assert.NoError(t, pr.LoadIssue(t.Context()))
 
-			// capture the current PR head ref so we can wait for the async
-			// refs/pull/N/head sync triggered by the next push to complete
-			baseGitRepo, err := gitrepo.OpenRepository(t.Context(), repo)
-			require.NoError(t, err)
-			defer baseGitRepo.Close()
-			headRefBefore, err := baseGitRepo.GetRefCommitID(pr.GetGitHeadRefName())
-			require.NoError(t, err)
-
 			// update the file on the pr branch
-			_, err = files_service.ChangeRepoFiles(t.Context(), repo, user2, &files_service.ChangeRepoFilesOptions{
+			resp, err := files_service.ChangeRepoFiles(t.Context(), repo, user2, &files_service.ChangeRepoFilesOptions{
 				OldBranch: "codeowner-basebranch",
 				Files: []*files_service.ChangeRepoFile{
 					{
@@ -119,18 +153,11 @@ func TestPullView_CodeOwner(t *testing.T) {
 			})
 			assert.NoError(t, err)
 
-			// refs/pull/N/head is refreshed asynchronously by the push hook; wait for
-			// it before evaluating code owners, otherwise the changed-file set may not
-			// yet include user8-file.md and the review request would be missed
+			// the push above requests user8's review asynchronously
 			require.Eventually(t, func() bool {
-				headRefAfter, err := baseGitRepo.GetRefCommitID(pr.GetGitHeadRefName())
-				return err == nil && headRefAfter != headRefBefore
-			}, 30*time.Second, 100*time.Millisecond)
-
-			reviewNotifiers, err := issue_service.PullRequestCodeOwnersReview(t.Context(), pr)
-			require.NoError(t, err)
-			require.Len(t, reviewNotifiers, 1)
-			assert.EqualValues(t, 8, reviewNotifiers[0].Reviewer.ID)
+				return unittest.GetCount(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest, ReviewerID: 8}) == 1
+			}, 10*time.Second, 20*time.Millisecond, "code owner user8 was never requested for review")
+			unittest.AssertCount(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest}, 2) // only user5 and user8
 
 			err = issue_service.ChangeTitle(t.Context(), pr.Issue, user2, "[WIP] Test Pull Request")
 			assert.NoError(t, err)
@@ -143,6 +170,78 @@ func TestPullView_CodeOwner(t *testing.T) {
 			prUpdated2 := unittest.AssertExistsAndLoadBean(t, &issues_model.PullRequest{ID: pr.ID})
 			assert.NoError(t, prUpdated2.LoadIssue(t.Context()))
 			assert.Equal(t, "Test Pull Request2", prUpdated2.Issue.Title)
+
+			// ensure it cannot be merged
+			hasCodeownerReviews := issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user5, pr.Issue, issues_model.ReviewTypeApprove, "Very good", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+
+			// should still fail (we also need user8)
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user8, pr.Issue, issues_model.ReviewTypeApprove, "Very good", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+
+			// now we should be able to merge
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.True(t, hasCodeownerReviews)
+
+			_, err = issue_service.ReviewRequest(t.Context(), pr.Issue, user5, nil, user5, true)
+			assert.NoError(t, err)
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			// a later requested-changes review from a required code owner must override
+			// that user's earlier approval and no longer satisfy the requirement
+			_, _, err = issues_model.SubmitReview(t.Context(), user5, pr.Issue, issues_model.ReviewTypeReject, "Needs changes", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+		})
+
+		t.Run("Dismissed Code Owner Review", func(t *testing.T) {
+			_, err := files_service.ChangeRepoFiles(t.Context(), repo, user2, &files_service.ChangeRepoFilesOptions{
+				NewBranch: "codeowner-dismiss-branch",
+				Files: []*files_service.ChangeRepoFile{
+					{
+						Operation:     "update",
+						TreePath:      "README.md",
+						ContentReader: strings.NewReader("# New README content\n"),
+					},
+				},
+			})
+			assert.NoError(t, err)
+
+			session := loginUser(t, "user2")
+			testPullCreate(t, session, "user2", "test_codeowner", false, repo.DefaultBranch, "codeowner-dismiss-branch", "Test Code Owner Dismissal")
+
+			pr := unittest.AssertExistsAndLoadBean(t, &issues_model.PullRequest{BaseRepoID: repo.ID, HeadBranch: "codeowner-dismiss-branch"})
+			unittest.AssertExistsAndLoadBean(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest, ReviewerID: 5})
+
+			hasCodeownerReviews := issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user5, pr.Issue, issues_model.ReviewTypeApprove, " LGTM", "", false, make([]string, 0))
+			assert.NoError(t, err)
+
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.True(t, hasCodeownerReviews)
+
+			review := unittest.AssertExistsAndLoadBean(t, &issues_model.Review{IssueID: pr.IssueID, ReviewerID: 5, Type: issues_model.ReviewTypeApprove})
+			assert.False(t, review.Dismissed)
+
+			err = issues_model.DismissReview(t.Context(), review, true)
+			assert.NoError(t, err)
+
+			review, err = issues_model.GetReviewByID(t.Context(), review.ID)
+			assert.NoError(t, err)
+			assert.True(t, review.Dismissed)
+
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
 		})
 
 		// change the default branch CODEOWNERS file to change README.md's codeowner
@@ -159,7 +258,7 @@ func TestPullView_CodeOwner(t *testing.T) {
 
 		t.Run("Second Pull Request", func(t *testing.T) {
 			// create a new branch to prepare for pull request
-			_, err = files_service.ChangeRepoFiles(t.Context(), repo, user2, &files_service.ChangeRepoFilesOptions{
+			resp, err := files_service.ChangeRepoFiles(t.Context(), repo, user2, &files_service.ChangeRepoFilesOptions{
 				NewBranch: "codeowner-basebranch2",
 				Files: []*files_service.ChangeRepoFile{
 					{
@@ -177,6 +276,24 @@ func TestPullView_CodeOwner(t *testing.T) {
 
 			pr := unittest.AssertExistsAndLoadBean(t, &issues_model.PullRequest{BaseRepoID: repo.ID, HeadBranch: "codeowner-basebranch2"})
 			unittest.AssertExistsAndLoadBean(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest, ReviewerID: 8})
+
+			// should need user8 approval only now
+			hasCodeownerReviews := issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			// exercise the real merge-time gate, not just the helper: the persisted
+			// protection rule must block the merge on the missing code owner review
+			err = pull_service.CheckPullBranchProtections(t.Context(), pr, false)
+			assert.ErrorContains(t, err, "code owner")
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user8, pr.Issue, issues_model.ReviewTypeApprove, "Very good", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.True(t, hasCodeownerReviews)
+
+			// and once the code owner has approved, the merge gate no longer blocks
+			assert.NoError(t, pull_service.CheckPullBranchProtections(t.Context(), pr, false))
 		})
 
 		t.Run("Forked Repo Pull Request", func(t *testing.T) {
@@ -188,7 +305,7 @@ func TestPullView_CodeOwner(t *testing.T) {
 			assert.NoError(t, err)
 
 			// create a new branch to prepare for pull request
-			_, err = files_service.ChangeRepoFiles(t.Context(), forkedRepo, user5, &files_service.ChangeRepoFilesOptions{
+			resp, err := files_service.ChangeRepoFiles(t.Context(), forkedRepo, user5, &files_service.ChangeRepoFilesOptions{
 				NewBranch: "codeowner-basebranch-forked",
 				Files: []*files_service.ChangeRepoFile{
 					{
@@ -229,6 +346,23 @@ func TestPullView_CodeOwner(t *testing.T) {
 
 			pr = unittest.AssertExistsAndLoadBean(t, &issues_model.PullRequest{BaseRepoID: repo.ID, HeadRepoID: forkedRepo.ID, HeadBranch: "codeowner-basebranch-forked"})
 			unittest.AssertExistsAndLoadBean(t, &issues_model.Review{IssueID: pr.IssueID, Type: issues_model.ReviewTypeRequest, ReviewerID: 8})
+
+			// will also need user8 for this
+			hasCodeownerReviews := issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user5, pr.Issue, issues_model.ReviewTypeApprove, "Very good", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+
+			// should still fail (user5 is not a code owner for this PR)
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.False(t, hasCodeownerReviews)
+
+			_, _, err = issues_model.SubmitReview(t.Context(), user8, pr.Issue, issues_model.ReviewTypeApprove, "Very good", resp.Commit.SHA, false, make([]string, 0))
+			assert.NoError(t, err)
+
+			hasCodeownerReviews = issue_service.HasAllRequiredCodeownerReviews(t.Context(), &protectBranch, pr)
+			assert.True(t, hasCodeownerReviews)
 		})
 	})
 }

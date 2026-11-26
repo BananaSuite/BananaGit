@@ -42,7 +42,7 @@
 					{{end}}
 				</div>
 				<div class="item-trailing">
-					<button class="ui red tiny button link-action" data-modal-confirm="{{if $isHosting}}{{if $.BananaGitSignIn.HostingOnly}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm_hosting_only"}}{{else}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm"}}{{end}}{{else}}#delete-account-link{{end}}" data-url="{{AppSubUrl}}/user/settings/security/account_link?id={{$loginSource.ID}}">
+					<button type="button" class="ui red tiny button link-action" data-modal-confirm="{{if $isHosting}}{{if $.BananaGitSignIn.HostingOnly}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm_hosting_only"}}{{else}}{{ctx.Locale.Tr "bananagit.link.disconnect_confirm"}}{{end}}{{else}}#delete-account-link{{end}}" data-url="{{AppSubUrl}}/user/settings/security/account_link?id={{$loginSource.ID}}">
 						{{if $isHosting}}{{ctx.Locale.Tr "bananagit.link.disconnect"}}{{else}}{{ctx.Locale.Tr "settings.delete_key"}}{{end}}
 					</button>
 				</div>

@@ -4,12 +4,48 @@
 package repo
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	issues_model "gitea.dev/models/issues"
+	"gitea.dev/models/perm"
+	access_model "gitea.dev/models/perm/access"
+	repo_model "gitea.dev/models/repo"
+	"gitea.dev/models/unit"
+	"gitea.dev/models/unittest"
+	"gitea.dev/modules/json"
+	"gitea.dev/modules/references"
+	api "gitea.dev/modules/structs"
+	"gitea.dev/services/context"
+	"gitea.dev/services/contexttest"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestCombineXRefComments(t *testing.T) {
+	none, closes, neutered := references.XRefActionNone, references.XRefActionCloses, references.XRefActionNeutered
+	xref := func(id, refIssueID, refCommentID int64, action references.XRefAction) *issues_model.Comment {
+		return &issues_model.Comment{ID: id, Type: issues_model.CommentTypeIssueRef, RefIssueID: refIssueID, RefCommentID: refCommentID, RefAction: action}
+	}
+	issue := issues_model.Issue{Comments: issues_model.CommentList{
+		xref(1, 10, 1, neutered),
+		xref(2, 11, 2, none),
+		xref(3, 10, 3, none),
+		xref(4, 11, 4, closes),
+		xref(5, 11, 5, neutered),
+		xref(6, 0, 0, none),
+		xref(7, 0, 0, none),
+	}}
+	combineXRefComments(&issue)
+	assert.Equal(t, issues_model.CommentList{
+		xref(1, 10, 3, none),
+		xref(2, 11, 2, closes),
+		xref(6, 0, 0, none),
+		xref(7, 0, 0, none),
+	}, issue.Comments)
+}
 
 func TestCombineLabelComments(t *testing.T) {
 	kases := []struct {
@@ -372,4 +408,60 @@ func TestCombineLabelComments(t *testing.T) {
 			assert.EqualValues(t, kase.afterCombined, issue.Comments)
 		})
 	}
+}
+
+func TestIssueListsRespectUnitReadPermission(t *testing.T) {
+	unittest.PrepareTestEnv(t)
+
+	// user2/repo1 with read access to issues only, so pull requests must stay hidden
+	issuesOnlyContext := func(path string) (*context.Context, *httptest.ResponseRecorder) {
+		ctx, resp := contexttest.MockContext(t, path)
+		contexttest.LoadUser(t, ctx, 2)
+		contexttest.LoadRepo(t, ctx, 1)
+		ctx.Repo.Permission = access_model.Permission{}
+		ctx.Repo.Permission.SetUnitsWithDefaultAccessMode([]*repo_model.RepoUnit{{Type: unit.TypeIssues}}, perm.AccessModeRead)
+		return ctx, resp
+	}
+
+	t.Run("SearchRepoIssuesJSON", func(t *testing.T) {
+		search := func(typ string) (int, []*api.Issue) {
+			ctx, resp := issuesOnlyContext("user2/repo1/issues/search")
+			ctx.Req.Form.Set("state", "all")
+			ctx.Req.Form.Set("type", typ)
+			SearchRepoIssuesJSON(ctx)
+			var issues []*api.Issue
+			if resp.Code == http.StatusOK {
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &issues))
+			}
+			return resp.Code, issues
+		}
+		code, _ := search("pulls")
+		assert.Equal(t, http.StatusForbidden, code)
+
+		code, issues := search("")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Len(t, issues, 2)
+		for _, issue := range issues {
+			assert.Nil(t, issue.PullRequest, "pull request #%d listed", issue.Index)
+		}
+	})
+
+	t.Run("MilestoneIssuesAndPulls", func(t *testing.T) {
+		// milestone1 of repo1 only holds pull request #2
+		view := func(issuesOnly bool) issues_model.IssueList {
+			ctx, resp := issuesOnlyContext("user2/repo1/milestone/1")
+			if !issuesOnly {
+				contexttest.LoadRepo(t, ctx, 1) // restores the owner permission of user2
+			}
+			contexttest.LoadGitRepo(t, ctx)
+			defer ctx.Repo.GitRepo.Close()
+			ctx.SetPathParam("id", "1")
+			MilestoneIssuesAndPulls(ctx)
+			assert.Equal(t, http.StatusOK, resp.Code)
+			issues, _ := ctx.Data["Issues"].(issues_model.IssueList)
+			return issues
+		}
+		assert.Len(t, view(false), 1)
+		assert.Empty(t, view(true))
+	})
 }

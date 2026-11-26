@@ -4,10 +4,14 @@
 package git
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"gitea.dev/modules/git/gitcmd"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const exampleDiff = `diff --git a/README.md b/README.md
@@ -120,9 +124,17 @@ func TestCutDiffAroundLine(t *testing.T) {
 	assert.Empty(t, emptyResult)
 
 	// Line is out of scope
-	emptyResult, err = CutDiffAroundLine(strings.NewReader(exampleDiff), 434, false, 0)
+	emptyResult, err = CutDiffAroundLine(strings.NewReader(exampleDiff), 7, false, 3)
 	assert.NoError(t, err)
 	assert.Empty(t, emptyResult)
+
+	noNewlineDiff := "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+a"
+	result, err = CutDiffAroundLine(strings.NewReader(noNewlineDiff), 1, false, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,1 +1,1 @@\n-a\n\\ No newline at end of file\n+a", result)
+	result, err = CutDiffAroundLine(strings.NewReader(noNewlineDiff), 1, true, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a", result)
 
 	// Handle minus diffs properly
 	minusDiff, err := CutDiffAroundLine(strings.NewReader(breakingDiff), 2, false, 4)
@@ -181,4 +193,41 @@ func TestParseDiffHunkString(t *testing.T) {
 	assert.Equal(t, 3, leftHunk)
 	assert.Equal(t, 19, rightLine)
 	assert.Equal(t, 5, rightHunk)
+}
+
+func TestGetAffectedFilesSpecialNames(t *testing.T) {
+	repoDir := filepath.Join(t.TempDir(), "repo.git")
+	require.NoError(t, gitcmd.NewCommand("init").AddDynamicArguments(repoDir).Run(t.Context()))
+	stdin := `commit refs/heads/main
+committer User <user@example.com> 1714310400 +0000
+data 1
+a
+M 100644 inline base.txt
+data 1
+x
+
+commit refs/heads/main
+committer User <user@example.com> 1714310401 +0000
+data 1
+b
+M 100644 inline "protected/we\"ird.md"
+data 1
+x
+M 100644 inline "protected/\344\270\255\346\226\207.md"
+data 1
+x
+M 100644 inline protected/normal.md
+data 1
+x
+R base.txt protected/renamed.md
+`
+	require.NoError(t, gitcmd.NewCommand("fast-import").WithDir(repoDir).WithStdinBytes([]byte(stdin)).Run(t.Context()))
+
+	repo, err := OpenRepository(t.Context(), mockRepository(repoDir))
+	require.NoError(t, err)
+	defer repo.Close()
+
+	files, err := GetAffectedFiles(t.Context(), repo, "main", "main~1", "main", nil)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{`protected/we"ird.md`, "protected/中文.md", "protected/normal.md", "base.txt", "protected/renamed.md"}, files)
 }

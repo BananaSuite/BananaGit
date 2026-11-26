@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	audit_model "gitea.dev/models/audit"
 	git_model "gitea.dev/models/git"
 	"gitea.dev/models/organization"
 	repo_model "gitea.dev/models/repo"
@@ -16,6 +17,7 @@ import (
 	api "gitea.dev/modules/structs"
 	"gitea.dev/modules/web"
 	"gitea.dev/routers/api/v1/utils"
+	"gitea.dev/services/audit"
 	"gitea.dev/services/context"
 	"gitea.dev/services/convert"
 	release_service "gitea.dev/services/release"
@@ -55,7 +57,7 @@ func ListTags(ctx *context.APIContext) {
 
 	listOpts := utils.GetListOptions(ctx)
 
-	tags, total, err := ctx.Repo.GitRepo.GetTagInfos(listOpts.Page, listOpts.PageSize)
+	tags, total, err := ctx.Repo.GitRepo.GetTagInfos(ctx, listOpts.Page, listOpts.PageSize)
 	if err != nil {
 		ctx.APIErrorInternal(err)
 		return
@@ -107,13 +109,13 @@ func GetAnnotatedTag(ctx *context.APIContext) {
 		return
 	}
 
-	tag, err := ctx.Repo.GitRepo.GetAnnotatedTag(sha)
+	tag, err := ctx.Repo.GitRepo.GetAnnotatedTag(ctx, sha)
 	if err != nil {
 		ctx.APIError(http.StatusBadRequest, err.Error())
 		return
 	}
 
-	commit, err := ctx.Repo.GitRepo.GetTagCommit(tag.Name)
+	commit, err := ctx.Repo.GitRepo.GetTagCommit(ctx, tag.Name)
 	if err != nil {
 		ctx.APIError(http.StatusBadRequest, err.Error())
 		return
@@ -151,7 +153,7 @@ func GetTag(ctx *context.APIContext) {
 	//     "$ref": "#/responses/notFound"
 	tagName := ctx.PathParam("*")
 
-	tag, err := ctx.Repo.GitRepo.GetTag(tagName)
+	tag, err := ctx.Repo.GitRepo.GetTag(ctx, tagName)
 	if err != nil {
 		ctx.APIErrorNotFound("tag doesn't exist: " + tagName)
 		return
@@ -194,14 +196,14 @@ func CreateTag(ctx *context.APIContext) {
 	//     "$ref": "#/responses/validationError"
 	//   "423":
 	//     "$ref": "#/responses/repoArchivedError"
-	form := web.GetForm(ctx).(*api.CreateTagOption)
+	form := web.GetForm[*api.CreateTagOption](ctx)
 
 	// If target is not provided use default branch
 	if len(form.Target) == 0 {
 		form.Target = ctx.Repo.Repository.DefaultBranch
 	}
 
-	commit, err := ctx.Repo.GitRepo.GetCommit(form.Target)
+	commit, err := ctx.Repo.GitRepo.GetCommit(ctx, form.Target)
 	if err != nil {
 		ctx.APIError(http.StatusNotFound, fmt.Sprintf("target not found: %v", err))
 		return
@@ -221,7 +223,7 @@ func CreateTag(ctx *context.APIContext) {
 		return
 	}
 
-	tag, err := ctx.Repo.GitRepo.GetTag(form.TagName)
+	tag, err := ctx.Repo.GitRepo.GetTag(ctx, form.TagName)
 	if err != nil {
 		ctx.APIErrorInternal(err)
 		return
@@ -411,7 +413,7 @@ func CreateTagProtection(ctx *context.APIContext) {
 	//   "423":
 	//     "$ref": "#/responses/repoArchivedError"
 
-	form := web.GetForm(ctx).(*api.CreateTagProtectionOption)
+	form := web.GetForm[*api.CreateTagProtectionOption](ctx)
 	repo := ctx.Repo.Repository
 
 	namePattern := strings.TrimSpace(form.NamePattern)
@@ -467,6 +469,7 @@ func CreateTagProtection(ctx *context.APIContext) {
 		ctx.APIErrorInternal(err)
 		return
 	}
+	audit.Record(ctx, audit_model.RepositoryTagProtectionAdd, repo, "pattern", protectTag.NamePattern)
 
 	pt, err = git_model.GetProtectedTagByID(ctx, protectTag.ID)
 	if err != nil {
@@ -522,7 +525,7 @@ func EditTagProtection(ctx *context.APIContext) {
 	//     "$ref": "#/responses/repoArchivedError"
 
 	repo := ctx.Repo.Repository
-	form := web.GetForm(ctx).(*api.EditTagProtectionOption)
+	form := web.GetForm[*api.EditTagProtectionOption](ctx)
 
 	id := ctx.PathParamInt64("id")
 	pt, err := git_model.GetProtectedTagByID(ctx, id)
@@ -574,6 +577,7 @@ func EditTagProtection(ctx *context.APIContext) {
 		ctx.APIErrorInternal(err)
 		return
 	}
+	audit.Record(ctx, audit_model.RepositoryTagProtectionUpdate, repo, "pattern", pt.NamePattern)
 
 	pt, err = git_model.GetProtectedTagByID(ctx, id)
 	if err != nil {
@@ -636,6 +640,7 @@ func DeleteTagProtection(ctx *context.APIContext) {
 		ctx.APIErrorInternal(err)
 		return
 	}
+	audit.Record(ctx, audit_model.RepositoryTagProtectionRemove, repo, "pattern", pt.NamePattern)
 
 	ctx.Status(http.StatusNoContent)
 }

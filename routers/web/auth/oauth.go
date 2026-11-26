@@ -19,13 +19,13 @@ import (
 	user_model "gitea.dev/models/user"
 	auth_module "gitea.dev/modules/auth"
 	"gitea.dev/modules/container"
-	"gitea.dev/modules/hostmatcher"
+	"gitea.dev/modules/egress"
 	"gitea.dev/modules/httplib"
 	"gitea.dev/modules/log"
 	"gitea.dev/modules/optional"
-	"gitea.dev/modules/proxy"
 	"gitea.dev/modules/session"
 	"gitea.dev/modules/setting"
+	"gitea.dev/services/audit"
 	source_service "gitea.dev/services/auth/source"
 	"gitea.dev/services/auth/source/oauth2"
 	bananagit_service "gitea.dev/services/bananagit"
@@ -57,13 +57,15 @@ func SignInOAuth(ctx *context.Context) {
 		return
 	}
 
-	if err = authSource.Cfg.(*oauth2.Source).Callout(ctx.Req, ctx.Resp); err != nil {
+	oauth2Source := auth.MustSourceCfg[*oauth2.Source](authSource)
+
+	if err = oauth2Source.Callout(ctx.Req, ctx.Resp); err != nil {
 		if strings.Contains(err.Error(), "no provider for ") {
 			if err = oauth2.ResetOAuth2(ctx); err != nil {
 				ctx.ServerError("SignIn", err)
 				return
 			}
-			if err = authSource.Cfg.(*oauth2.Source).Callout(ctx.Req, ctx.Resp); err != nil {
+			if err = oauth2Source.Callout(ctx.Req, ctx.Resp); err != nil {
 				ctx.ServerError("SignIn", err)
 			}
 			return
@@ -101,8 +103,7 @@ func SignInOAuthCallback(ctx *context.Context) {
 
 	u, gothUser, err := oAuth2UserLoginCallback(ctx, authSource, ctx.Req, ctx.Resp)
 	if err != nil {
-		if user_model.IsErrUserProhibitLogin(err) {
-			uplerr := err.(user_model.ErrUserProhibitLogin)
+		if uplerr, ok := err.(user_model.ErrUserProhibitLogin); ok {
 			log.Info("Failed authentication attempt for %s from %s: %v", uplerr.Name, ctx.RemoteAddr(), err)
 			ctx.Data["Title"] = ctx.Tr("auth.prohibit_login")
 			ctx.HTML(http.StatusOK, "user/auth/prohibit_login")
@@ -192,7 +193,7 @@ func SignInOAuthCallback(ctx *context.Context) {
 				IsActive: optional.Some(!setting.OAuth2Client.RegisterEmailConfirm && !setting.Service.RegisterManualConfirm),
 			}
 
-			source := authSource.Cfg.(*oauth2.Source)
+			source := auth.MustSourceCfg[*oauth2.Source](authSource)
 
 			linkAccountData := &LinkAccountData{authSource.ID, gothUser}
 			if setting.OAuth2Client.AccountLinking == setting.OAuth2AccountLinkingDisabled {
@@ -302,21 +303,10 @@ func showLinkingLogin(ctx *context.Context, authSourceID int64, gothUser goth.Us
 	ctx.Redirect(setting.AppSubURL + "/user/link_account")
 }
 
-// oauth2AvatarAllowList parses the host allow-list applied to avatar fetches from the global
-// [security] ALLOWED_HOST_LIST, defaulting an empty setting to the built-in "external" set. An empty
-// host-match list would otherwise disable the allow-list check entirely and permit any host, including
-// loopback/private addresses (SSRF).
-func oauth2AvatarAllowList() *hostmatcher.HostMatchList {
-	return hostmatcher.ParseHostMatchList("security.ALLOWED_HOST_LIST", setting.Security.AllowedHostList)
-}
-
-// oauth2AvatarHTTPClient builds the SSRF-protected client for avatar fetches. It is constructed per call
-// so a changed allowlist takes effect (avatar fetches are infrequent, so this is not a hot path).
 func oauth2AvatarHTTPClient() *http.Client {
-	allowList := oauth2AvatarAllowList()
 	return &http.Client{
 		Timeout:   30 * time.Second,
-		Transport: hostmatcher.NewHTTPTransport("oauth2-avatar", allowList, nil, proxy.Proxy(), setting.Proxy.ProxyURLFixed, nil),
+		Transport: egress.NewSecurityPolicy("oauth2-avatar").NewHTTPTransport(),
 	}
 }
 
@@ -376,7 +366,8 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 		}
 	}
 
-	oauth2Source := authSource.Cfg.(*oauth2.Source)
+	oauth2Source := auth.MustSourceCfg[*oauth2.Source](authSource)
+
 	groupTeamMapping, err := auth_module.UnmarshalGroupTeamMapping(oauth2Source.GroupTeamMap)
 	if err != nil {
 		ctx.ServerError("UnmarshalGroupTeamMapping", err)
@@ -391,7 +382,7 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 	// Reactivate user only if they were disabled by the OAuth2 auto sync cron (invalid_grant),
 	// which clears AccessToken/RefreshToken/ExpiresAt on the ExternalLoginUser row
 	// An admin-disabled user has no such signature, so we leave IsActive alone
-	// and let verifyAuthWithOptions route them through the prohibit-login / activate page.
+	// and let verifyAuthWithOptionsWeb route them through the prohibit-login / activate page.
 	if !u.IsActive {
 		extLogin, hasExt, err := user_model.GetExternalLogin(ctx, authSource.ID, gothUser.UserID)
 		if err != nil {
@@ -425,7 +416,7 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 		// Register last login
 		opts.SetLastLogin = true
 
-		if err := user_service.UpdateUser(ctx, u, opts); err != nil {
+		if err := user_service.UpdateUser(audit.WithDoer(ctx, user_model.NewAuthSourceUser()), u, opts); err != nil {
 			ctx.ServerError("UpdateUser", err)
 			return
 		}
@@ -435,9 +426,9 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 			return
 		}
 
-		if err := regenerateSession(ctx, bananagit_service.ActingSessionKeys, bananagit_service.WithActing(acting, map[string]any{
+		bananagit_service.ClearActing(ctx.Session) // BananaGit
+		if err := regenerateSession(ctx, bananagit_service.WithActing(acting, map[string]any{
 			session.KeyUID:                  u.ID,
-			session.KeyUname:                u.Name,
 			session.KeyUserHasTwoFactorAuth: userHasTwoFactorAuth,
 			session.KeySignInMethod:         session.SignInMethodOAuth2,
 		})); err != nil {
@@ -455,7 +446,7 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 	}
 
 	if opts.IsActive.Has() || opts.IsAdmin.Has() || opts.IsRestricted.Has() {
-		if err := user_service.UpdateUser(ctx, u, opts); err != nil {
+		if err := user_service.UpdateUser(audit.WithDoer(ctx, user_model.NewAuthSourceUser()), u, opts); err != nil {
 			ctx.ServerError("UpdateUser", err)
 			return
 		}
@@ -467,7 +458,7 @@ func handleOAuth2SignIn(ctx *context.Context, authSource *auth.Source, u *user_m
 // OAuth2UserLoginCallback attempts to handle the callback from the OAuth2 provider and if successful
 // login the user
 func oAuth2UserLoginCallback(ctx *context.Context, authSource *auth.Source, request *http.Request, response http.ResponseWriter) (*user_model.User, goth.User, error) {
-	oauth2Source := authSource.Cfg.(*oauth2.Source)
+	oauth2Source := auth.MustSourceCfg[*oauth2.Source](authSource)
 
 	// Make sure that the response is not an error response.
 	errorName := request.FormValue("error")

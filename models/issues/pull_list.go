@@ -166,6 +166,14 @@ func GetPullRequestIDsByCheckStatus(ctx context.Context, status PullRequestStatu
 		Find(&prs)
 }
 
+func GetInterruptedPullRequestIDs(ctx context.Context) ([]int64, error) {
+	prs := make([]int64, 0, 10)
+	return prs, db.GetEngine(ctx).Table("pull_request").
+		Where("merged_commit_id <> '' AND has_merged = ? AND merged_unix >= ?", false, timeutil.TimeStampNow()-24*3600).
+		Cols("pull_request.id").
+		Find(&prs)
+}
+
 // PullRequests returns all pull requests for a base Repo by the given conditions
 func PullRequests(ctx context.Context, baseRepoID int64, opts *PullRequestsOptions) (PullRequestList, int64, error) {
 	if opts.Page <= 0 {
@@ -327,8 +335,8 @@ func (prs PullRequestList) LoadReviews(ctx context.Context) (ReviewList, error) 
 			"reviewer_team_id":   0,
 		}).
 		GroupBy("issue_id, reviewer_id")
-	// Get latest review of each reviewer, sorted in order they were made
-	if err := db.GetEngine(ctx).In("id", subQuery).OrderBy("review.updated_unix ASC").Find(&reviews); err != nil {
+	// Get latest review of each reviewer, sorted in order they were made. Joined because MySQL scans all reviews for "id IN (subquery)", xorm aliases the subquery "review".
+	if err := db.GetEngine(ctx).Table("review").Alias("latest").Join("INNER", subQuery, "latest.id = review.id").OrderBy("latest.updated_unix ASC").Find(&reviews); err != nil {
 		return nil, err
 	}
 
@@ -342,7 +350,7 @@ func (prs PullRequestList) LoadReviews(ctx context.Context) (ReviewList, error) 
 		"reviewer_team_id": 0,
 	}).
 		GroupBy("issue_id, reviewer_team_id")
-	if err := db.GetEngine(ctx).In("id", subQueryTeam).OrderBy("review.updated_unix ASC").Find(&teamReviewRequests); err != nil {
+	if err := db.GetEngine(ctx).Table("review").Alias("latest").Join("INNER", subQueryTeam, "latest.id = review.id").OrderBy("latest.updated_unix ASC").Find(&teamReviewRequests); err != nil {
 		return nil, err
 	}
 

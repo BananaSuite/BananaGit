@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"gitea.dev/modules/setting"
 	"gitea.dev/modules/translation"
+	"gitea.dev/modules/util"
 )
 
 type htmlChunkReader struct {
@@ -29,6 +31,10 @@ type escapeStreamer struct {
 	locale          translation.Locale
 	ambiguousTables []*AmbiguousTable
 	allowed         map[rune]bool
+
+	tagPartial []byte // partial tag content, used to detect if we are in some tags
+
+	inTagMath bool // MathML operators like U+2212 are intended and wrapping them breaks the math layout
 
 	out io.Writer
 }
@@ -49,11 +55,9 @@ func escapeStream(locale translation.Locale, in io.Reader, out io.Writer, opts .
 		es.allowed = opts[0].Allowed
 	}
 
-	readCount := 0
-	lastIsTag := false
+	isContentBegin := true
 	for {
 		parts, partInTag, err := es.readRunes()
-		readCount++
 		if err == io.EOF {
 			return es.escaped, nil
 		} else if err != nil {
@@ -61,25 +65,55 @@ func escapeStream(locale translation.Locale, in io.Reader, out io.Writer, opts .
 		}
 		for i, part := range parts {
 			if partInTag[i] {
-				lastIsTag = true
+				isContentBegin = true
+				es.trackHtmlTag(part)
 				if _, err := out.Write(part); err != nil {
 					return nil, err
 				}
 			} else {
-				// if last part is tag, then this part is content begin
-				// if the content is the first part of the first read, then it's also content begin
-				isContentBegin := lastIsTag || (readCount == 1 && i == 0)
-				lastIsTag = false
 				if isContentBegin {
+					isContentBegin = false
 					if part, err = es.trimAndWriteBom(part); err != nil {
 						return nil, err
 					}
 				}
-				if err = es.detectAndWriteRunes(part); err != nil {
+				if es.inTagMath {
+					if _, err := out.Write(part); err != nil {
+						return nil, err
+					}
+				} else if err = es.detectAndWriteRunes(part); err != nil {
 					return nil, err
 				}
 			}
 		}
+	}
+}
+
+// trackHtmlTag receives tag parts, a tag might be split into multiple parts
+func (e *escapeStreamer) trackHtmlTag(part []byte) {
+	const maxHeadLen = 100 // only read the first N bytes of the tag for detection purpose
+	if part[0] == '<' {
+		// start a new tag
+		e.tagPartial = e.tagPartial[:0]
+	}
+	if len(e.tagPartial) >= maxHeadLen {
+		return
+	}
+	e.tagPartial = append(e.tagPartial, part[:min(len(part), maxHeadLen-len(e.tagPartial))]...)
+
+	isTag := func(prefix string) bool {
+		if len(e.tagPartial) < len(prefix)+1 {
+			return false
+		}
+		if !util.AsciiEqualFold(e.tagPartial[:len(prefix)], []byte(prefix)) {
+			return false
+		}
+		return strings.IndexByte(" \t\n\r\f>", e.tagPartial[len(prefix)]) != -1
+	}
+	if isTag("<math") {
+		e.inTagMath = true
+	} else if isTag("</math") {
+		e.inTagMath = false
 	}
 }
 
@@ -197,18 +231,23 @@ func (e *htmlChunkReader) readRunes() (parts [][]byte, partInTag []bool, _ error
 		copy(curPart, e.readBuf[pos:curPartEnd])
 		// now we get the curPart bytes, but we can't directly use it, the last rune in it might have been cut
 		// try to decode the last rune, if it's invalid, then we cut the last byte and try again until we get a valid rune or no byte left
-		for i := curPartLen - 1; i >= 0; i-- {
-			last, lastSize := utf8.DecodeRune(curPart[i:])
-			if last == utf8.RuneError && lastSize == 1 {
-				curPartLen--
-			} else {
-				curPartLen += lastSize - 1
-				break
+		if e.readErr == nil && curPartEnd == len(e.readBuf) {
+			for i := curPartLen - 1; i >= 0; i-- {
+				last, lastSize := utf8.DecodeRune(curPart[i:])
+				if last == utf8.RuneError && lastSize == 1 {
+					curPartLen--
+				} else {
+					curPartLen += lastSize - 1
+					break
+				}
 			}
 		}
 		if curPartLen == 0 {
+			if !utf8.FullRune(curPart) && len(curPart) <= cap(e.readBuf)*3/4 {
+				break // keep a rune cut by the read boundary for the next read
+			}
 			// actually it's impossible that the part doesn't contain any valid rune,
-			// the only case is that the cap(readBuf) is too small, or the origin contain indeed doesn't contain any valid rune
+			// the only case is that the cap(readBuf) is too small, or the origin content indeed doesn't contain any valid rune
 			// * try to leave the last 4 bytes (possible longest utf-8 encoding) to next round
 			// * at least consume 1 byte to avoid infinite loop
 			curPartLen = max(len(curPart)-utf8.UTFMax, 1)

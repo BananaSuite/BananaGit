@@ -149,7 +149,6 @@ func TestActingGuard(t *testing.T) {
 	actingSession := func(until time.Time, uid int64) *memStore {
 		values := (&bananagit_module.Acting{UID: 2, AdminSub: "acct-root", AdminName: "root", Until: until}).SessionValues()
 		values[session.KeyUID] = uid
-		values[session.KeyUname] = "user2"
 		return newMemStore(values)
 	}
 	guard := func(reqPath string, store *memStore, doer *user_model.User) (*httptest.ResponseRecorder, map[string]any) {

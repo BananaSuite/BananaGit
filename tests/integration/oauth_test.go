@@ -29,7 +29,10 @@ import (
 	"gitea.dev/modules/test"
 	"gitea.dev/modules/timeutil"
 	"gitea.dev/modules/util"
+	"gitea.dev/modules/web"
+	"gitea.dev/routers/web/auth"
 	"gitea.dev/services/auth/source/oauth2"
+	"gitea.dev/services/context"
 	"gitea.dev/services/oauth2_provider"
 	"gitea.dev/tests"
 
@@ -40,6 +43,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOAuth2LinkAccountSignupAutoLinking(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	defer test.MockVariableValue(&setting.OAuth2Client.AccountLinking, setting.OAuth2AccountLinkingAuto)()
+	defer test.MockVariableValue(&setting.Service.RequireExternalRegistrationPassword, false)()
+
+	addOAuth2Source(t, "test-link-signup", oauth2.Source{})
+	authSource, err := auth_model.GetActiveOAuth2SourceByAuthName(t.Context(), "test-link-signup")
+	require.NoError(t, err)
+
+	signUp := func(t *testing.T, gothUser goth.User, userName, email string, expectedStatus int) (*TestSession, *httptest.ResponseRecorder) {
+		defer web.RouteMockReset()
+		web.RouteMock(web.MockAfterMiddlewares, func(ctx *context.Context) {
+			require.NoError(t, auth.Oauth2SetLinkAccountData(ctx, auth.LinkAccountData{AuthSourceID: authSource.ID, GothUser: gothUser}))
+		})
+		session := emptyTestSession(t)
+		req := NewRequestWithValues(t, "POST", "/user/link_account_signup", map[string]string{
+			"user_name": userName,
+			"email":     email,
+		})
+		return session, session.MakeRequest(t, req, expectedStatus)
+	}
+
+	user2 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
+	for _, form := range []struct{ name, userName, email, errMsg string }{
+		{"FormNamesOtherUser", user2.Name, "new-user@example.com", "The username is already taken."},
+		{"FormUsesOtherUsersEmail", "new-user", user2.Email, "The email address is already used."},
+	} {
+		t.Run(form.name, func(t *testing.T) {
+			gothUser := goth.User{UserID: form.name, Email: "external@example.com"}
+			_, resp := signUp(t, gothUser, form.userName, form.email, http.StatusOK)
+			assert.Contains(t, resp.Body.String(), form.errMsg)
+			unittest.AssertNotExistsBean(t, &user_model.ExternalLoginUser{ExternalID: gothUser.UserID}, unittest.OrderBy("external_id"))
+		})
+	}
+
+	t.Run("ExternalIdentityMatchesUser", func(t *testing.T) {
+		gothUser := goth.User{UserID: "user2-sub", Email: user2.Email}
+		session, _ := signUp(t, gothUser, user2.Name, user2.Email, http.StatusSeeOther)
+		unittest.AssertExistsAndLoadBean(t, &user_model.ExternalLoginUser{ExternalID: gothUser.UserID, UserID: user2.ID}, unittest.OrderBy("external_id"))
+		session.MakeRequest(t, NewRequest(t, "GET", "/user/settings"), http.StatusOK)
+	})
+}
 
 func testOAuth2PrepareTestCode(t *testing.T) {
 	require.NoError(t, db.TruncateBeans(t.Context(), &auth_model.OAuth2AuthorizationCode{}))
@@ -108,6 +154,7 @@ func TestOAuth2(t *testing.T) {
 		t.Run("AuthorizeNoClientID", testAuthorizeNoClientID)
 		t.Run("AuthorizeUnregisteredRedirect", testAuthorizeUnregisteredRedirect)
 		t.Run("AuthorizeUnsupportedResponseType", testAuthorizeUnsupportedResponseType)
+		t.Run("AuthorizeUnsupportedResponseTypeIDToken", testAuthorizeUnsupportedResponseTypeIDToken)
 		t.Run("AuthorizeUnsupportedCodeChallengeMethod", testAuthorizeUnsupportedCodeChallengeMethod)
 		t.Run("AuthorizeLoginRedirect", testAuthorizeLoginRedirect)
 		t.Run("AuthorizeShow", testAuthorizeShow)
@@ -155,6 +202,16 @@ func testAuthorizeUnregisteredRedirect(t *testing.T) {
 
 func testAuthorizeUnsupportedResponseType(t *testing.T) {
 	req := NewRequest(t, "GET", "/login/oauth/authorize?client_id=da7da3ba-9a13-4167-856f-3899de0b0138&redirect_uri=https://example.com&response_type=UNEXPECTED&state=thestate")
+	ctx := loginUser(t, "user1")
+	resp := ctx.MakeRequest(t, req, http.StatusSeeOther)
+	u, err := resp.Result().Location()
+	assert.NoError(t, err)
+	assert.Equal(t, "unsupported_response_type", u.Query().Get("error"))
+	assert.Equal(t, "Only code response type is supported.", u.Query().Get("error_description"))
+}
+
+func testAuthorizeUnsupportedResponseTypeIDToken(t *testing.T) {
+	req := NewRequest(t, "GET", "/login/oauth/authorize?client_id=da7da3ba-9a13-4167-856f-3899de0b0138&redirect_uri=https://example.com&response_type=id_token&state=thestate")
 	ctx := loginUser(t, "user1")
 	resp := ctx.MakeRequest(t, req, http.StatusSeeOther)
 	u, err := resp.Result().Location()
@@ -576,6 +633,15 @@ func testRefreshTokenInvalidation(t *testing.T) {
 		"client_id":     "da7da3ba-9a13-4167-856f-3899de0b0138",
 		"client_secret": "4MK8Na6R55smdCY0WuCCumZ6hjRPnGY5saWVRHHjJiA=",
 		"redirect_uri":  "https://example.com",
+		"refresh_token": parsed.AccessToken,
+	})
+	MakeRequest(t, req, http.StatusBadRequest)
+
+	req = NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
+		"grant_type":    "refresh_token",
+		"client_id":     "da7da3ba-9a13-4167-856f-3899de0b0138",
+		"client_secret": "4MK8Na6R55smdCY0WuCCumZ6hjRPnGY5saWVRHHjJiA=",
+		"redirect_uri":  "https://example.com",
 		"refresh_token": parsed.RefreshToken,
 	})
 
@@ -600,6 +666,10 @@ func testRefreshTokenInvalidation(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsedError))
 	assert.Equal(t, "unauthorized_client", string(parsedError.ErrorCode))
 	assert.Equal(t, "token was already used", parsedError.ErrorDescription)
+
+	req = NewRequestWithValues(t, "POST", "/login/oauth/introspect", map[string]string{"token": parsed.RefreshToken}).
+		AddBasicAuth("da7da3ba-9a13-4167-856f-3899de0b0138", "4MK8Na6R55smdCY0WuCCumZ6hjRPnGY5saWVRHHjJiA=")
+	assert.JSONEq(t, `{"active":false}`, MakeRequest(t, req, http.StatusOK).Body.String())
 }
 
 func testRefreshTokenCrossClientUsage(t *testing.T) {
@@ -706,6 +776,16 @@ func testOAuthIntrospection(t *testing.T) {
 	req.Header.Add("Authorization", "Basic ZGE3ZGEzYmEtOWExMy00MTY3LTg1NmYtMzg5OWRlMGIwMTM4OjRNSzhOYTZSNTVzbWRDWTBXdUNDdW1aNmhqUlBuR1k1c2FXVlJISGpK")
 	resp = MakeRequest(t, req, http.StatusUnauthorized)
 	assert.Contains(t, resp.Body.String(), "no valid authorization")
+
+	require.NoError(t, user_model.UpdateUserCols(t.Context(), &user_model.User{ID: 1, ProhibitLogin: true}, "prohibit_login"))
+	defer func() {
+		require.NoError(t, user_model.UpdateUserCols(t.Context(), &user_model.User{ID: 1}, "prohibit_login"))
+	}()
+	for _, token := range []string{parsed.AccessToken, parsed.RefreshToken} {
+		req = NewRequestWithValues(t, "POST", "/login/oauth/introspect", map[string]string{"token": token}).
+			AddBasicAuth("da7da3ba-9a13-4167-856f-3899de0b0138", "4MK8Na6R55smdCY0WuCCumZ6hjRPnGY5saWVRHHjJiA=")
+		assert.JSONEq(t, `{"active":false}`, MakeRequest(t, req, http.StatusOK).Body.String())
+	}
 }
 
 func testOAuthIntrospectionCrossClientIsolation(t *testing.T) {
@@ -869,7 +949,7 @@ func issueOAuthAccessTokenForScope(t *testing.T, user *user_model.User, scope st
 	authorizeURL := fmt.Sprintf("/login/oauth/authorize?client_id=%s&redirect_uri=https://example.com&response_type=code&state=thestate", app.ClientID)
 	authorizeReq := NewRequest(t, "GET", authorizeURL)
 	authorizeResp := ctx.MakeRequest(t, authorizeReq, http.StatusSeeOther)
-	authcode := strings.Split(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")[0]
+	authcode, _, _ := strings.Cut(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")
 
 	accessTokenReq := NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
 		"grant_type":    "authorization_code",
@@ -923,7 +1003,7 @@ func testOAuthGrantScopesReadRepositoryFailOrganization(t *testing.T) {
 	authorizeReq := NewRequest(t, "GET", authorizeURL)
 	authorizeResp := ctx.MakeRequest(t, authorizeReq, http.StatusSeeOther)
 
-	authcode := strings.Split(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")[0]
+	authcode, _, _ := strings.Cut(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")
 	accessTokenReq := NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
 		"grant_type":    "authorization_code",
 		"client_id":     app.ClientID,
@@ -1060,7 +1140,7 @@ func testOAuthGrantScopesClaimPublicOnlyGroups(t *testing.T) {
 	authorizeReq := NewRequest(t, "GET", authorizeURL)
 	authorizeResp := ctx.MakeRequest(t, authorizeReq, http.StatusSeeOther)
 
-	authcode := strings.Split(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")[0]
+	authcode, _, _ := strings.Cut(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")
 
 	accessTokenReq := NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
 		"grant_type":    "authorization_code",
@@ -1102,6 +1182,12 @@ func testOAuthGrantScopesClaimPublicOnlyGroups(t *testing.T) {
 	userinfoParsed := new(userinfoResponse)
 	require.NoError(t, json.Unmarshal(userinfoResp.Body.Bytes(), userinfoParsed))
 	assert.Contains(t, userinfoParsed.Email, "user2@example.com")
+
+	defer test.MockVariableValue(&setting.DisableQueryAuthToken, false)()
+	queryUserinfoResp := MakeRequest(t, NewRequest(t, "GET", "/login/oauth/userinfo?access_token="+parsed.AccessToken), http.StatusOK)
+	queryUserinfoParsed := new(userinfoResponse)
+	require.NoError(t, json.Unmarshal(queryUserinfoResp.Body.Bytes(), queryUserinfoParsed))
+	assert.Equal(t, userinfoParsed.Groups, queryUserinfoParsed.Groups)
 
 	// test both id_token and call to /login/oauth/userinfo
 	for _, publicGroup := range []string{
@@ -1158,7 +1244,7 @@ func testOAuthGrantScopesClaimAllGroups(t *testing.T) {
 	authorizeReq := NewRequest(t, "GET", authorizeURL)
 	authorizeResp := ctx.MakeRequest(t, authorizeReq, http.StatusSeeOther)
 
-	authcode := strings.Split(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")[0]
+	authcode, _, _ := strings.Cut(strings.Split(authorizeResp.Body.String(), "?code=")[1], "&amp")
 
 	accessTokenReq := NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
 		"grant_type":    "authorization_code",
@@ -1299,6 +1385,8 @@ func testSignInOauthCallbackSyncSSHKeys(t *testing.T) {
 	addOAuth2Source(t, "test-oidc-source", oauth2Source)
 	authSource, err := auth_model.GetActiveOAuth2SourceByAuthName(ctx, "test-oidc-source")
 	require.NoError(t, err)
+	authSourceCfg, ok := authSource.Cfg.(*oauth2.Source)
+	require.True(t, ok)
 
 	sshKey1 := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICV0MGX/W9IvLA4FXpIuUcdDcbj5KX4syHgsTy7soVgf"
 	sshKey2 := "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIE7kM1R02+4ertDKGKEDcKG0s+2vyDDcIvceJ0Gqv5f1AAAABHNzaDo="
@@ -1336,7 +1424,7 @@ func testSignInOauthCallbackSyncSSHKeys(t *testing.T) {
 			defer test.MockVariableValue(&setting.OAuth2Client.EnableAutoRegistration, true)()
 			defer test.MockVariableValue(&gothic.CompleteUserAuth, func(res http.ResponseWriter, req *http.Request) (goth.User, error) {
 				return goth.User{
-					Provider: authSource.Cfg.(*oauth2.Source).Provider,
+					Provider: authSourceCfg.Provider,
 					UserID:   "oidc-userid",
 					Email:    "oidc-email@example.com",
 					RawData:  c.mockRawData,
@@ -1393,7 +1481,7 @@ func testOAuthSourceSpecialChars(t *testing.T) {
 	doc.Find(".external-login-link").Each(func(i int, s *goquery.Selection) {
 		oauth2Links = append(oauth2Links, s.AttrOr("href", ""))
 	})
-	assert.Equal(t, []string{
+	assert.ElementsMatch(t, []string{
 		"/user/oauth2/test%20space",
 		"/user/oauth2/test+plus",
 	}, oauth2Links)

@@ -73,7 +73,8 @@ ENABLE_OPENID_SIGNUP = true
 
 	t.Run("hosting warns when local sign-up stays open", func(t *testing.T) {
 		StartupProblems = nil
-		loadBananaGitTestConfig(t, "[bananagit]\nSIGNIN_MODE = hosting\n")
+		// Gitea 28 turned registration off by default, so the test opens it
+		loadBananaGitTestConfig(t, "[service]\nDISABLE_REGISTRATION = false\n[bananagit]\nSIGNIN_MODE = hosting\n")
 		require.Len(t, StartupProblems, 1)
 		assert.Contains(t, StartupProblems[0], "ALLOW_ONLY_EXTERNAL_REGISTRATION")
 	})

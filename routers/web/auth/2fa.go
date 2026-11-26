@@ -7,12 +7,16 @@ import (
 	"errors"
 	"net/http"
 
+	audit_model "gitea.dev/models/audit"
 	"gitea.dev/models/auth"
 	user_model "gitea.dev/models/user"
+	"gitea.dev/modules/log"
 	"gitea.dev/modules/session"
 	"gitea.dev/modules/setting"
 	"gitea.dev/modules/templates"
+	"gitea.dev/modules/util"
 	"gitea.dev/modules/web"
+	"gitea.dev/services/audit"
 	"gitea.dev/services/context"
 	"gitea.dev/services/forms"
 )
@@ -41,17 +45,16 @@ func TwoFactor(ctx *context.Context) {
 
 // TwoFactorPost validates a user's two-factor authentication token.
 func TwoFactorPost(ctx *context.Context) {
-	form := web.GetForm(ctx).(*forms.TwoFactorAuthForm)
+	form := web.GetForm[*forms.TwoFactorAuthForm](ctx)
 	ctx.Data["Title"] = ctx.Tr("twofa")
 
 	// Ensure user is in a 2FA session.
-	idSess := ctx.Session.Get("twofaUid")
-	if idSess == nil {
+	id, hasSession := ctx.Session.Get("twofaUid").(int64)
+	if !hasSession {
 		ctx.ServerError("UserSignIn", errors.New("not in 2FA session"))
 		return
 	}
 
-	id := idSess.(int64)
 	twofa, err := auth.GetTwoFactorByUID(ctx, id)
 	if err != nil {
 		ctx.ServerError("UserSignIn", err)
@@ -59,14 +62,14 @@ func TwoFactorPost(ctx *context.Context) {
 	}
 
 	// Validate the passcode and atomically consume it to prevent reuse/replay.
-	ok, err := twofa.ValidateAndConsumeTOTP(ctx, form.Passcode)
+	tfaResult, err := twofa.ValidateAndConsumeTOTP(ctx, form.Passcode)
 	if err != nil {
 		ctx.ServerError("UserSignIn", err)
 		return
 	}
 
-	if ok {
-		remember := ctx.Session.Get("twofaRemember").(bool)
+	if tfaResult == auth.TwoFactorResultValid {
+		remember := ctx.Session.Get("twofaRemember").(bool) //nolint:forcetypeassert // must exist
 		u, err := user_model.GetUserByID(ctx, id)
 		if err != nil {
 			ctx.ServerError("UserSignIn", err)
@@ -83,7 +86,12 @@ func TwoFactorPost(ctx *context.Context) {
 		return
 	}
 
-	ctx.RenderWithErrDeprecated(ctx.Tr("auth.twofa_passcode_incorrect"), tplTwofa, forms.TwoFactorAuthForm{})
+	if u, err := user_model.GetUserByID(ctx, id); err == nil {
+		audit.RecordAs(ctx, u, audit_model.UserAuthenticationFailTwoFactor, u)
+		log.Warn("Failed authentication attempt for %s from %s: invalid two-factor passcode", u.Name, ctx.RemoteAddr())
+	}
+	errMsg := ctx.Tr(util.Iif(tfaResult == auth.TwoFactorResultTooManyAttempts, "auth.twofa_too_many_attempts", "auth.twofa_passcode_incorrect"))
+	ctx.RenderWithErrDeprecated(errMsg, tplTwofa, forms.TwoFactorAuthForm{})
 }
 
 // TwoFactorScratch shows the scratch code form for two-factor authentication.
@@ -105,17 +113,16 @@ func TwoFactorScratch(ctx *context.Context) {
 
 // TwoFactorScratchPost validates and invalidates a user's two-factor scratch token.
 func TwoFactorScratchPost(ctx *context.Context) {
-	form := web.GetForm(ctx).(*forms.TwoFactorScratchAuthForm)
+	form := web.GetForm[*forms.TwoFactorScratchAuthForm](ctx)
 	ctx.Data["Title"] = ctx.Tr("twofa_scratch")
 
 	// Ensure user is in a 2FA session.
-	idSess := ctx.Session.Get("twofaUid")
-	if idSess == nil {
+	id, hasSession := ctx.Session.Get("twofaUid").(int64)
+	if !hasSession {
 		ctx.ServerError("UserSignIn", errors.New("not in 2FA session"))
 		return
 	}
 
-	id := idSess.(int64)
 	twofa, err := auth.GetTwoFactorByUID(ctx, id)
 	if err != nil {
 		ctx.ServerError("UserSignIn", err)
@@ -135,7 +142,7 @@ func TwoFactorScratchPost(ctx *context.Context) {
 			return
 		}
 
-		remember := ctx.Session.Get("twofaRemember").(bool)
+		remember := ctx.Session.Get("twofaRemember").(bool) //nolint:forcetypeassert // must exist
 		u, err := user_model.GetUserByID(ctx, id)
 		if err != nil {
 			ctx.ServerError("UserSignIn", err)

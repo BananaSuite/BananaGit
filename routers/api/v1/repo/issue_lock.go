@@ -50,10 +50,9 @@ func LockIssue(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	reason := web.GetForm(ctx).(*api.LockIssueOption).Reason
-	issue, err := issues_model.GetIssueByIndex(ctx, ctx.Repo.Repository.ID, ctx.PathParamInt64("index"))
-	if err != nil {
-		ctx.APIErrorAuto(err)
+	reason := web.GetForm[*api.LockIssueOption](ctx).Reason
+	issue := getRepoIssueByIndexForDoer(ctx, ctx.PathParamInt64("index"))
+	if issue == nil {
 		return
 	}
 
@@ -64,13 +63,13 @@ func LockIssue(ctx *context.APIContext) {
 
 	if !issue.IsLocked {
 		opt := &issues_model.IssueLockOptions{
-			Doer:   ctx.ContextUser,
+			Doer:   ctx.Doer,
 			Issue:  issue,
 			Reason: reason,
 		}
 
 		issue.Repo = ctx.Repo.Repository
-		err = issues_model.LockIssue(ctx, opt)
+		err := issues_model.LockIssue(ctx, opt)
 		if err != nil {
 			ctx.APIErrorInternal(err)
 			return
@@ -114,9 +113,8 @@ func UnlockIssue(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	issue, err := issues_model.GetIssueByIndex(ctx, ctx.Repo.Repository.ID, ctx.PathParamInt64("index"))
-	if err != nil {
-		ctx.APIErrorAuto(err)
+	issue := getRepoIssueByIndexForDoer(ctx, ctx.PathParamInt64("index"))
+	if issue == nil {
 		return
 	}
 
@@ -127,12 +125,12 @@ func UnlockIssue(ctx *context.APIContext) {
 
 	if issue.IsLocked {
 		opt := &issues_model.IssueLockOptions{
-			Doer:  ctx.ContextUser,
+			Doer:  ctx.Doer,
 			Issue: issue,
 		}
 
 		issue.Repo = ctx.Repo.Repository
-		err = issues_model.UnlockIssue(ctx, opt)
+		err := issues_model.UnlockIssue(ctx, opt)
 		if err != nil {
 			ctx.APIErrorInternal(err)
 			return

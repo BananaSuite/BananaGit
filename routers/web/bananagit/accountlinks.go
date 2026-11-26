@@ -90,9 +90,7 @@ func renderAccountLinks(ctx *context.Context, status int) {
 	ctx.Data["UnlinkedOnly"] = opts.UnlinkedOnly
 	ctx.Data["Users"] = users
 	ctx.Data["Total"] = total
-	pager := context.NewPagination(total, opts.PageSize, opts.Page, 5)
-	pager.AddParamFromRequest(ctx.Req)
-	ctx.Data["Page"] = pager
+	ctx.Data["Page"] = context.NewPagerBuilder(ctx).TotalCount(total).PerPageLimit(opts.PageSize).CurPage(opts.Page).Build()
 	ctx.HTML(status, tplAccountLinks)
 }
 

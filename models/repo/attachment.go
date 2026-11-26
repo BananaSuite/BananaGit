@@ -12,6 +12,7 @@ import (
 	"path"
 
 	"gitea.dev/models/db"
+	"gitea.dev/modules/httplib"
 	"gitea.dev/modules/log"
 	"gitea.dev/modules/setting"
 	"gitea.dev/modules/storage"
@@ -41,6 +42,10 @@ func init() {
 	db.RegisterModel(new(Attachment))
 }
 
+func (a *Attachment) IsLinked() bool {
+	return a.IssueID > 0 || a.ReleaseID > 0 || a.CommentID > 0
+}
+
 // IncreaseDownloadCount is update download count + 1
 func (a *Attachment) IncreaseDownloadCount(ctx context.Context) error {
 	// Update download count.
@@ -62,12 +67,13 @@ func (a *Attachment) RelativePath() string {
 }
 
 // DownloadURL returns the download url of the attached file
-func (a *Attachment) DownloadURL() string {
+func (a *Attachment) DownloadURL(optCtx ...context.Context) string {
+	// mail template doesn't have context, so we need to use a default one
+	ctx := util.OptionalArg(optCtx, context.TODO())
 	if a.CustomDownloadURL != "" {
 		return a.CustomDownloadURL
 	}
-
-	return setting.AppURL + "attachments/" + url.PathEscape(a.UUID)
+	return httplib.MakeAbsoluteURL(ctx, setting.AppSubURL+"/attachments/"+url.PathEscape(a.UUID))
 }
 
 // ErrAttachmentNotExist represents a "AttachmentNotExist" kind of error.
@@ -131,6 +137,9 @@ func ExistAttachmentsByUUID(ctx context.Context, uuid string) (bool, error) {
 
 // GetAttachmentsByIssueID returns all attachments of an issue.
 func GetAttachmentsByIssueID(ctx context.Context, issueID int64) ([]*Attachment, error) {
+	if issueID == 0 { // unsaved issue, would match every issue-less attachment
+		return []*Attachment{}, nil
+	}
 	attachments := make([]*Attachment, 0, 10)
 	return attachments, db.GetEngine(ctx).Where("issue_id = ? AND comment_id = 0", issueID).Find(&attachments)
 }

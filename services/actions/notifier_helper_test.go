@@ -11,9 +11,11 @@ import (
 	actions_model "gitea.dev/models/actions"
 	issues_model "gitea.dev/models/issues"
 	repo_model "gitea.dev/models/repo"
+	"gitea.dev/models/unittest"
 	user_model "gitea.dev/models/user"
 	actions_module "gitea.dev/modules/actions"
 	"gitea.dev/modules/actions/jobparser"
+	webhook_module "gitea.dev/modules/webhook"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,13 +105,29 @@ func TestIfNeedApproval(t *testing.T) {
 	})
 }
 
+func TestGetApprovalUsersAddsForkPullRequestAuthorUnlessDefaultBranchWorkflow(t *testing.T) {
+	require.NoError(t, unittest.PrepareTestDatabase())
+
+	pr := unittest.AssertExistsAndLoadBean(t, &issues_model.PullRequest{ID: 1})
+	doer := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
+
+	approvalUsers, err := getApprovalUsers(t.Context(), &notifyInput{Doer: doer, PullRequest: pr, Event: webhook_module.HookEventPullRequest}, true)
+	require.NoError(t, err)
+	require.Len(t, approvalUsers, 2)
+	assert.Equal(t, []int64{doer.ID, pr.Issue.PosterID}, []int64{approvalUsers[0].ID, approvalUsers[1].ID})
+
+	approvalUsers, err = getApprovalUsers(t.Context(), &notifyInput{Doer: doer, PullRequest: pr, Event: webhook_module.HookEventIssueComment}, true)
+	require.NoError(t, err)
+	assert.Equal(t, []*user_model.User{doer}, approvalUsers)
+}
+
 func TestFilteredWorkflowCommitStatusForForkPullRequest(t *testing.T) {
-	forkPR := &issues_model.PullRequest{
+	input := new(notifyInput).WithPullRequest(&issues_model.PullRequest{
 		Flow:       issues_model.PullRequestFlowGithub,
 		BaseRepoID: 1,
 		HeadRepoID: 2,
-	}
-	input := newPullRequestReviewNotifyInput(&repo_model.Repository{ID: 1}, &user_model.User{ID: 2}, actions_module.GithubEventPullRequest, "refs/pull/1/head", forkPR)
+		Index:      1,
+	})
 
 	assert.True(t, isForkPullRequestInput(input))
 	assert.Equal(t, "refs/pull/1/head", input.Ref.String())

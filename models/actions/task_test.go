@@ -10,9 +10,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	runnerv1 "gitea.dev/actions-proto-go/runner/v1"
+	runnerv1 "gitea.dev/actionslib/runner/v1"
 	"gitea.dev/models/db"
 	repo_model "gitea.dev/models/repo"
+	"gitea.dev/models/unit"
 	"gitea.dev/models/unittest"
 	"gitea.dev/modules/actions/jobparser"
 	"gitea.dev/modules/timeutil"
@@ -36,6 +37,18 @@ func TestActionTask_GetRunJobLink(t *testing.T) {
 	assert.Empty(t, (&ActionTask{}).GetRunJobLink())
 	assert.Empty(t, (&ActionTask{Job: &ActionRunJob{ID: 42}}).GetRunJobLink())
 	assert.Empty(t, (&ActionTask{Job: &ActionRunJob{ID: 42, Run: &ActionRun{ID: 10}}}).GetRunJobLink())
+}
+
+func TestGetTaskRunnerNames(t *testing.T) {
+	require.NoError(t, unittest.PrepareTestDatabase())
+	ctx := t.Context()
+	runner := &ActionRunner{Name: "queue-runner"}
+	require.NoError(t, db.Insert(ctx, runner))
+	task := &ActionTask{RunnerID: runner.ID, TokenHash: "queue-test-task"}
+	require.NoError(t, db.Insert(ctx, task))
+	names, err := GetTaskRunnerNames(ctx, []int64{task.ID, 987654321})
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]string{task.ID: runner.Name}, names)
 }
 
 func TestMakeTaskStepDisplayName(t *testing.T) {
@@ -246,6 +259,11 @@ func TestReleaseTaskForRunner(t *testing.T) {
 	}
 	require.NoError(t, db.Insert(t.Context(), run))
 
+	disabledRun := &ActionRun{RepoID: 2, TriggerUserID: 2}
+	require.NoError(t, db.Insert(t.Context(), disabledRun))
+	disabledJob := &ActionRunJob{RunID: disabledRun.ID, RepoID: 2, Status: StatusWaiting, RunsOn: []string{"ubuntu-latest"}}
+	require.NoError(t, db.Insert(t.Context(), disabledJob))
+
 	job := &ActionRunJob{
 		RunID:           run.ID,
 		RepoID:          run.RepoID,
@@ -267,11 +285,13 @@ func TestReleaseTaskForRunner(t *testing.T) {
 	}
 	runner.GenerateAndFillToken()
 	require.NoError(t, db.Insert(t.Context(), runner))
+	require.NoError(t, db.Insert(t.Context(), &repo_model.RepoUnit{RepoID: run.RepoID, Type: unit.TypeActions}))
 
-	task, ok, err := CreateTaskForRunner(t.Context(), runner)
+	task, cancelledJobs, err := CreateTaskForRunner(t.Context(), runner)
 	require.NoError(t, err)
-	require.True(t, ok)
 	require.NotNil(t, task)
+	require.Len(t, cancelledJobs, 1)
+	assert.Equal(t, StatusCancelled, unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: disabledJob.ID}).Status)
 
 	claimed := unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: job.ID})
 	require.Equal(t, StatusRunning, claimed.Status)
@@ -312,6 +332,11 @@ func TestCreateTaskForRunnerPagination(t *testing.T) {
 	}
 	require.NoError(t, db.Insert(t.Context(), run))
 
+	disabledRun := &ActionRun{RepoID: 2, TriggerUserID: 2}
+	require.NoError(t, db.Insert(t.Context(), disabledRun))
+	disabledJob := &ActionRunJob{RunID: disabledRun.ID, RepoID: 2, Status: StatusWaiting, RunsOn: []string{"ubuntu-latest"}}
+	require.NoError(t, db.Insert(t.Context(), disabledJob))
+
 	// Five waiting jobs the runner cannot run, then one it can.
 	// With a page size of 2 the matching job only appears on the third page.
 	for i := range 5 {
@@ -350,11 +375,13 @@ func TestCreateTaskForRunnerPagination(t *testing.T) {
 	}
 	runner.GenerateAndFillToken()
 	require.NoError(t, db.Insert(t.Context(), runner))
+	require.NoError(t, db.Insert(t.Context(), &repo_model.RepoUnit{RepoID: run.RepoID, Type: unit.TypeActions}))
 
-	task, ok, err := CreateTaskForRunner(t.Context(), runner)
+	task, cancelledJobs, err := CreateTaskForRunner(t.Context(), runner)
 	require.NoError(t, err)
-	require.True(t, ok)
 	require.NotNil(t, task)
+	require.Len(t, cancelledJobs, 1)
+	assert.Equal(t, StatusCancelled, unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: disabledJob.ID}).Status)
 
 	claimed := unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: target.ID})
 	assert.Equal(t, StatusRunning, claimed.Status)
@@ -380,14 +407,19 @@ func TestUpdateTaskByStateIsAtomic(t *testing.T) {
 	task, job := newRunningTaskForCancelling(t, "atomic-report-job", true)
 	require.NoError(t, db.Insert(t.Context(), &ActionTaskStep{TaskID: task.ID, RepoID: task.RepoID, Status: StatusRunning}))
 	unittest.GetXORMEngine().AddHook(&failFirstStepWrite{})
-	finalState := &runnerv1.TaskState{Id: task.ID, Result: runnerv1.Result_RESULT_SUCCESS, StoppedAt: timestamppb.Now()}
+	skewed := &timestamppb.Timestamp{Seconds: 1}
+	finalState := &runnerv1.TaskState{Id: task.ID, Result: runnerv1.Result_RESULT_SUCCESS, StoppedAt: skewed, Steps: []*runnerv1.StepState{{StartedAt: skewed}}}
+	before := timeutil.TimeStampNow()
 	_, err := UpdateTaskByState(t.Context(), task.RunnerID, finalState)
 	require.Error(t, err)
 	assert.Equal(t, StatusRunning, unittest.AssertExistsAndLoadBean(t, &ActionTask{ID: task.ID}).Status)
 	assert.Equal(t, StatusRunning, unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: job.ID}).Status)
 	_, err = UpdateTaskByState(t.Context(), task.RunnerID, finalState)
 	require.NoError(t, err)
-	assert.Equal(t, StatusSuccess, unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: job.ID}).Status)
+	gotJob := unittest.AssertExistsAndLoadBean(t, &ActionRunJob{ID: job.ID})
+	assert.Equal(t, StatusSuccess, gotJob.Status)
+	assert.GreaterOrEqual(t, gotJob.Stopped, before)
+	assert.GreaterOrEqual(t, unittest.AssertExistsAndLoadBean(t, &ActionTaskStep{TaskID: task.ID}).Started, before)
 }
 
 // newRunningTaskForCancelling inserts a running run/job/task assigned to a fresh runner,
