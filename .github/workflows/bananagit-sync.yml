@@ -1,11 +1,12 @@
 # BananaGit: follow upstream Gitea.
 #
-# Every day, look for a newer Gitea release of the series main is on. When there
-# is one, apply it on a branch, build it and open a pull request that says
-# whether the build passed. A maintainer merges it
-# and runs bananagit/scripts/release.sh, which signs the release tag: the signing
-# key never lives in CI, so a compromised workflow cannot release anything that
-# servers with signature checks would install.
+# Every day, look for a newer Gitea release, whatever its number. When there
+# is one, apply it on a branch, build it, run the tests of our own code and
+# open a pull request that says how both went. When it does not apply cleanly,
+# open an issue that names the files to resolve by hand. A maintainer merges
+# the pull request and runs bananagit/scripts/release.sh, which signs the
+# release tag: the signing key never lives in CI, so a compromised workflow
+# cannot release anything that servers with signature checks would install.
 name: bananagit-sync
 on:
   schedule:
@@ -14,18 +15,49 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 jobs:
   sync:
     if: github.repository == 'BananaSuite/BananaGit'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Merge the newest upstream release
+      - name: Apply the newest upstream release
         id: merge
         run: |
           git config user.name "bananagit-sync"
           git config user.email "bananagit-sync@users.noreply.github.com"
-          echo "tag=$(bananagit/scripts/sync-upstream.sh)" >> "$GITHUB_OUTPUT"
+          if tag=$(bananagit/scripts/sync-upstream.sh); then
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Anything but a conflict (no network, a broken tree) fails the run.
+          files=$(git diff --name-only --diff-filter=U)
+          test -n "$files"
+          {
+            echo "conflict=$(cat bananagit/UPSTREAM_VERSION)"
+            echo "files<<END_OF_FILES"
+            echo "$files"
+            echo "END_OF_FILES"
+          } >> "$GITHUB_OUTPUT"
+      - name: Ask for a manual merge
+        if: steps.merge.outputs.conflict != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.merge.outputs.conflict }}
+          FILES: ${{ steps.merge.outputs.files }}
+        run: |
+          title="Gitea $TAG needs a manual merge"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq length)
+          test "$open" = 0 || exit 0
+          {
+            echo "Upstream released Gitea $TAG and it does not apply cleanly to main. The conflicts are in:"
+            echo
+            echo "$FILES" | sed 's/^/- `/; s/$/`/'
+            echo
+            echo "Run \`bananagit/scripts/sync-upstream.sh $TAG\` on a branch, resolve them, commit and open a pull request."
+          } > "$RUNNER_TEMP/body.md"
+          gh issue create --title "$title" --body-file "$RUNNER_TEMP/body.md"
       # Built here because pull requests opened by a workflow do not start other workflows.
       - uses: actions/setup-go@v5
         if: steps.merge.outputs.tag != ''
@@ -43,15 +75,24 @@ jobs:
         if: steps.merge.outputs.tag != ''
         continue-on-error: true
         run: TAGS="sqlite sqlite_unlock_notify" make build
+      - name: Test our own code
+        id: test
+        if: steps.merge.outputs.tag != '' && steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          go test -tags "sqlite sqlite_unlock_notify" \
+            ./modules/bananagit/... ./services/bananagit/... ./routers/web/bananagit/... \
+            ./services/auth/source/oauth2/bananawiki/... ./routers/web/admin/ ./modules/setting/
       - name: Open a pull request
         if: steps.merge.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.merge.outputs.tag }}
           BUILD: ${{ steps.build.outcome }}
+          TEST: ${{ steps.test.outcome }}
         run: |
           branch="sync/gitea-$TAG"
           git ls-remote --exit-code origin "refs/heads/$branch" && exit 0
           git push origin "HEAD:refs/heads/$branch"
           gh pr create --base main --head "$branch" --title "Update to Gitea $TAG" \
-            --body "Upstream released Gitea $TAG; it applied without conflicts and the build result is: $BUILD. Merge, then run bananagit/scripts/release.sh to sign and publish BananaGit $TAG.1."
+            --body "Upstream released Gitea $TAG; it applied without conflicts. Build: $BUILD. Tests of our own code: $TEST. Merge, then run bananagit/scripts/release.sh to sign and publish BananaGit $TAG.1."

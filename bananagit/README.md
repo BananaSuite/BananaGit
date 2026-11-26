@@ -44,9 +44,11 @@ commits it. Nobody writes code for this: files we replace entirely are listed
 in [OURS](OURS) and skipped, so only the few lines we change inside Gitea's
 own files can ever conflict. `bananagit/scripts/diff-upstream.sh` lists how
 the tree differs from the Gitea release it is based on; anything beyond the
-table above is drift to remove. On GitHub a daily workflow (`bananagit-sync`) runs it for patch
-releases of the same series, builds the result and opens a pull request that
-says whether the build passed. A maintainer merges it and runs:
+table above is drift to remove. On GitHub a daily workflow (`bananagit-sync`) runs it for the
+newest Gitea release, whatever its series, builds the result, runs the tests
+of our own code and opens a pull request that says how both went. When the
+release does not apply cleanly it opens an issue that names the files to
+resolve by hand instead. A maintainer merges the pull request and runs:
 
 ```sh
 bananagit/scripts/release.sh     # builds the binaries, creates the signed tag v1.27.4.1
@@ -56,8 +58,8 @@ BananaGit tags are `vX.Y.Z.N`: Gitea's version plus our own counter. Servers
 with automatic updates then install it (see [docs/updating.md](docs/updating.md)).
 The tag is signed by a maintainer on purpose: a signing key in CI would let
 anyone who takes over the workflow release code that every server installs as
-root. A new minor series is applied by hand:
-`bananagit/scripts/sync-upstream.sh v1.28.0`.
+root. To stop at a release that is not the newest, name it:
+`bananagit/scripts/sync-upstream.sh v28.4.0`.
 
 ## Documentation
 

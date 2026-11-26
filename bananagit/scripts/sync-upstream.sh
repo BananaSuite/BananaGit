@@ -1,8 +1,8 @@
 #!/bin/sh
 # Bring main up to a newer upstream Gitea release.
 #
-#   bananagit/scripts/sync-upstream.sh            # newest patch release of the vX.Y series main is on
-#   bananagit/scripts/sync-upstream.sh v1.28.0    # a specific upstream tag (a new series)
+#   bananagit/scripts/sync-upstream.sh            # the newest Gitea release
+#   bananagit/scripts/sync-upstream.sh v28.4.0    # a specific upstream tag
 #
 # This repository does not carry Gitea's history, to stay small. The script
 # fetches only the two upstream releases involved (the one main is based on,
@@ -10,19 +10,25 @@
 # difference between them to main with a three-way merge and commits it.
 # Files we replace entirely (listed in bananagit/OURS: Gitea's CI workflows,
 # the README, the logo) are left out, so they never conflict. Prints the upstream tag it applied, or nothing when main is
-# already there. On conflicts it stops with the conflicts marked: resolve
-# them (ours are in the few files listed in bananagit/README.md), then
+# already there. On conflicts it stops with the conflicts marked and names the
+# files: resolve them (ours are in the few files listed in bananagit/README.md), then
 # `git add -A && git commit`. Nothing is pushed and no release is tagged.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 UPSTREAM=${BANANAGIT_UPSTREAM:-https://github.com/go-gitea/gitea.git}
 test -z "$(git status --porcelain)" || { echo "Commit your changes first." >&2; exit 1; }
 current=$(cat bananagit/UPSTREAM_VERSION)
-series=${current%.*}
-target=${1:-$(git ls-remote --tags --refs "$UPSTREAM" "refs/tags/$series.*" | sed 's|.*refs/tags/||' \
+# Releases only (vX.Y.Z, no -rc or -dev), newest by version whatever the
+# series: Gitea went from v1.27 to v28, and sort -V orders those correctly.
+target=${1:-$(git ls-remote --tags --refs "$UPSTREAM" | sed 's|.*refs/tags/||' \
   | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)}
+test -n "$target" || { echo "Could not read the release tags of $UPSTREAM." >&2; exit 1; }
 if [ "$target" = "$current" ]; then
   exit 0
+fi
+if [ "$(printf '%s\n' "$current" "$target" | sort -V | tail -1)" != "$target" ]; then
+  echo "$target is older than $current, which main is based on." >&2
+  exit 1
 fi
 git fetch --quiet --no-tags --depth 1 "$UPSTREAM" \
   "+refs/tags/$current:refs/bananagit/old" "+refs/tags/$target:refs/bananagit/new"
@@ -35,7 +41,9 @@ done < bananagit/OURS
 echo "$target" > bananagit/UPSTREAM_VERSION
 git add bananagit/UPSTREAM_VERSION
 if ! git diff --binary refs/bananagit/old refs/bananagit/new -- . "$@" | git apply --quiet --3way --index >&2; then
-  echo "Conflicts applying Gitea $target: resolve them, then git add -A && git commit -m 'Update to Gitea $target'." >&2
+  echo "Conflicts applying Gitea $target in:" >&2
+  git diff --name-only --diff-filter=U >&2
+  echo "Resolve them, then git add -A && git commit -m 'Update to Gitea $target'." >&2
   exit 1
 fi
 git commit --quiet -m "Update to Gitea $target

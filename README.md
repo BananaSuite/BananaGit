@@ -164,13 +164,14 @@ BananaGit stays a soft fork: a new Gitea release is applied to this tree
 without anyone writing code.
 
 ```sh
-bananagit/scripts/sync-upstream.sh           # newest patch release of the current series
-bananagit/scripts/sync-upstream.sh v1.28.0   # a new series
+bananagit/scripts/sync-upstream.sh           # the newest Gitea release
+bananagit/scripts/sync-upstream.sh v28.4.0   # a specific one
 bananagit/scripts/diff-upstream.sh           # what still differs from Gitea
 ```
 
 On GitHub the `bananagit-sync` workflow does the first one daily, builds the
-result and opens a pull request. Files we replace entirely (the README, the
+result, tests our own code and opens a pull request, or an issue when the
+release needs a manual merge. Files we replace entirely (the README, the
 logo, `.github/`) are listed in [bananagit/OURS](bananagit/OURS) and skipped,
 so they cannot conflict; the few lines we change inside Gitea's files are the
 only place a conflict can come from. Details: [bananagit/README.md](bananagit/README.md#following-gitea).
